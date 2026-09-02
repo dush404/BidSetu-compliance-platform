@@ -30,3 +30,6 @@ Then open:
 ## No-GPU Mode
 
 Ollama is intentionally not included in Docker Compose yet. The AI worker runs in mock-data mode by default and serves the five sample bidders in `ai-worker/mock_data.json`. When Ollama is available later, set `OLLAMA_URL` and add the integration logic without changing the Compose services.
+
+
+python -m uvicorn main:app --reload --port 8000

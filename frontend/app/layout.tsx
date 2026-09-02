@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   description: "Intelligent bidder verification and compliance decision support for procurement officers",
 };
 
+import AxiosSetup from "./axios-setup";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -16,7 +18,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <AxiosSetup />
+        {children}
+      </body>
     </html>
   );
 }

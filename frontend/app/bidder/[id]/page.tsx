@@ -73,7 +73,6 @@ type Bidder = {
     verificationResult?: VerificationResult | string;
     documents?: { data: any[] };
     tender?: { data: { id: number; attributes: { title: string; tenderId: string } } };
-  };
 };
 
 const CHECK_META: Record<string, { label: string; source: string; icon: React.ReactNode }> = {
@@ -121,9 +120,9 @@ export default function BidderDetailPage({ params }: { params: { id: string } })
     setLoading(true);
     try {
       const res = await axios.get(
-        `${STRAPI}/api/bidder-applications/${params.id}?populate[documents]=*&populate[tender][populate][0]=*`
+        `${STRAPI}/api/bidder-applications?filters[id][$eq]=${params.id}&populate[documents]=*&populate[tender][populate][0]=*`
       );
-      setBidder(res.data.data);
+      setBidder(res.data.data[0]);
     } catch (err) {
       console.error("Error fetching bidder:", err);
     } finally {
@@ -173,11 +172,11 @@ export default function BidderDetailPage({ params }: { params: { id: string } })
     );
   }
 
-  const a = bidder.attributes;
+  const a = bidder;
   const score = a.complianceScore ?? 0;
   const risk = a.riskLevel || "Unknown";
   const status = a.verificationStatus || "Pending";
-  const tender = a.tender?.data?.attributes;
+  const tender = a.tender;
   const tenderId = a.tender?.data?.id;
 
   // Parse verificationResult
@@ -516,7 +515,7 @@ export default function BidderDetailPage({ params }: { params: { id: string } })
                 </div>
               ) : (
                 a.documents.data.map((doc: any) => {
-                  const isPdf = doc.attributes.mime?.includes("pdf") || doc.attributes.ext === ".pdf";
+                  const isPdf = doc.mime?.includes("pdf") || doc.ext === ".pdf";
                   return (
                     <button
                       key={doc.id}
@@ -527,7 +526,7 @@ export default function BidderDetailPage({ params }: { params: { id: string } })
                         <FileText className="w-4 h-4 text-gray-500 group-hover:text-navy-600" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-gray-800 truncate">{doc.attributes.name}</div>
+                        <div className="text-sm font-semibold text-gray-800 truncate">{doc.name}</div>
                         <div className="text-xs text-gray-400">{isPdf ? "PDF" : "Image"} · Click to view</div>
                       </div>
                       <ExternalLink className="w-3.5 h-3.5 text-gray-300 group-hover:text-navy-500 flex-shrink-0" />

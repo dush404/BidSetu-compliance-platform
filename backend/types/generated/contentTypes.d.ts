@@ -466,22 +466,34 @@ export interface ApiBidderApplicationBidderApplication
       'images' | 'files' | 'videos' | 'audios',
       true
     >;
+    dpiitNumber: Schema.Attribute.String;
+    epfoCode: Schema.Attribute.String;
+    esicCode: Schema.Attribute.String;
     gstin: Schema.Attribute.String;
+    lastVerifiedAt: Schema.Attribute.DateTime;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
       'api::bidder-application.bidder-application'
     > &
       Schema.Attribute.Private;
+    nsicNumber: Schema.Attribute.String;
     panNumber: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
-    statusId: Schema.Attribute.Enumeration<['Pending', 'Verified', 'Rejected']>;
-    tender: Schema.Attribute.Relation<'oneToOne', 'api::tender.tender'>;
+    riskLevel: Schema.Attribute.Enumeration<
+      ['Low', 'Medium', 'High', 'Critical']
+    >;
+    tender: Schema.Attribute.Relation<'manyToOne', 'api::tender.tender'>;
     udyamId: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     verificationlog: Schema.Attribute.JSON;
+    verificationResult: Schema.Attribute.JSON;
+    verificationStatus: Schema.Attribute.Enumeration<
+      ['Pending', 'Processing', 'Verified', 'Rejected', 'Manual Review']
+    > &
+      Schema.Attribute.DefaultTo<'Pending'>;
   };
 }
 
@@ -512,6 +524,77 @@ export interface ApiBlacklistDatabaseBlacklistDatabase
     pan: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     reason: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiEpfoDatabaseEpfoDatabase
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'epfo_databases';
+  info: {
+    displayName: 'EPFO Database';
+    pluralName: 'epfo-databases';
+    singularName: 'epfo-database';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    employeeCount: Schema.Attribute.Integer;
+    establishmentCode: Schema.Attribute.String & Schema.Attribute.Unique;
+    establishmentName: Schema.Attribute.String;
+    lastComplianceDate: Schema.Attribute.Date;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::epfo-database.epfo-database'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      ['Compliant', 'Non-Compliant', 'Defaulter']
+    > &
+      Schema.Attribute.DefaultTo<'Compliant'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiEsicDatabaseEsicDatabase
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'esic_databases';
+  info: {
+    displayName: 'ESIC Database';
+    pluralName: 'esic-databases';
+    singularName: 'esic-database';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    esicCode: Schema.Attribute.String & Schema.Attribute.Unique;
+    establishmentName: Schema.Attribute.String;
+    lastComplianceDate: Schema.Attribute.Date;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::esic-database.esic-database'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      ['Compliant', 'Non-Compliant', 'Defaulter']
+    > &
+      Schema.Attribute.DefaultTo<'Compliant'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -618,6 +701,41 @@ export interface ApiIntegrationConfigIntegrationConfig
   };
 }
 
+export interface ApiNsicDatabaseNsicDatabase
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'nsic_databases';
+  info: {
+    displayName: 'NSIC Database';
+    pluralName: 'nsic-databases';
+    singularName: 'nsic-database';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    category: Schema.Attribute.String;
+    companyName: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    expiryDate: Schema.Attribute.Date;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::nsic-database.nsic-database'
+    > &
+      Schema.Attribute.Private;
+    nsicNumber: Schema.Attribute.String & Schema.Attribute.Unique;
+    publishedAt: Schema.Attribute.DateTime;
+    registrationDate: Schema.Attribute.Date;
+    status: Schema.Attribute.Enumeration<['Active', 'Expired', 'Cancelled']> &
+      Schema.Attribute.DefaultTo<'Active'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiPanDatabasePanDatabase extends Struct.CollectionTypeSchema {
   collectionName: 'pan_databases';
   info: {
@@ -649,6 +767,42 @@ export interface ApiPanDatabasePanDatabase extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiStartupIndiaDatabaseStartupIndiaDatabase
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'startup_india_databases';
+  info: {
+    displayName: 'Startup India Database';
+    pluralName: 'startup-india-databases';
+    singularName: 'startup-india-database';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    companyName: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    dpiitNumber: Schema.Attribute.String & Schema.Attribute.Unique;
+    expiryDate: Schema.Attribute.Date;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::startup-india-database.startup-india-database'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    recognitionDate: Schema.Attribute.Date;
+    status: Schema.Attribute.Enumeration<
+      ['Recognized', 'Expired', 'Cancelled']
+    > &
+      Schema.Attribute.DefaultTo<'Recognized'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiTenderTender extends Struct.CollectionTypeSchema {
   collectionName: 'tenders';
   info: {
@@ -660,12 +814,18 @@ export interface ApiTenderTender extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    bidderApplications: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::bidder-application.bidder-application'
+    >;
     bidderCount: Schema.Attribute.Integer;
+    closingDate: Schema.Attribute.DateTime;
     createdAt: Schema.Attribute.DateTime;
     createdAtDate: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    description: Schema.Attribute.Blocks;
+    department: Schema.Attribute.String;
+    description: Schema.Attribute.Text;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -673,7 +833,9 @@ export interface ApiTenderTender extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
-    statusId: Schema.Attribute.Enumeration<['Open', 'Closed', 'Awarded']>;
+    publishedDate: Schema.Attribute.DateTime;
+    statusId: Schema.Attribute.Enumeration<['Open', 'Closed', 'Awarded']> &
+      Schema.Attribute.DefaultTo<'Open'>;
     tenderId: Schema.Attribute.String & Schema.Attribute.Unique;
     title: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
@@ -1115,10 +1277,14 @@ declare module '@strapi/strapi' {
       'admin::user': AdminUser;
       'api::bidder-application.bidder-application': ApiBidderApplicationBidderApplication;
       'api::blacklist-database.blacklist-database': ApiBlacklistDatabaseBlacklistDatabase;
+      'api::epfo-database.epfo-database': ApiEpfoDatabaseEpfoDatabase;
+      'api::esic-database.esic-database': ApiEsicDatabaseEsicDatabase;
       'api::gem-portal.gem-portal': ApiGemPortalGemPortal;
       'api::gst-database.gst-database': ApiGstDatabaseGstDatabase;
       'api::integration-config.integration-config': ApiIntegrationConfigIntegrationConfig;
+      'api::nsic-database.nsic-database': ApiNsicDatabaseNsicDatabase;
       'api::pan-database.pan-database': ApiPanDatabasePanDatabase;
+      'api::startup-india-database.startup-india-database': ApiStartupIndiaDatabaseStartupIndiaDatabase;
       'api::tender.tender': ApiTenderTender;
       'api::udyam-database.udyam-database': ApiUdyamDatabaseUdyamDatabase;
       'api::verification-log.verification-log': ApiVerificationLogVerificationLog;

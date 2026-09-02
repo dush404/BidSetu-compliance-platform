@@ -20,7 +20,7 @@ const AI_URL = process.env.NEXT_PUBLIC_AI_WORKER_URL || "http://localhost:8000";
 
 type Bidder = {
   id: number;
-  attributes: {
+  
     bidderName: string;
     companyName?: string;
     gstin?: string;
@@ -30,12 +30,11 @@ type Bidder = {
     riskLevel?: string;
     lastVerifiedAt?: string;
     aiRecommendation?: string;
-  };
 };
 
 type Tender = {
   id: number;
-  attributes: {
+  
     title: string;
     tenderId: string;
     statusId: string;
@@ -44,7 +43,6 @@ type Tender = {
     publishedDate?: string;
     bidderCount?: number;
     description?: any;
-  };
 };
 
 const FILTER_OPTIONS = ["All", "Pending", "Processing", "Verified", "Rejected", "Manual Review"];
@@ -68,10 +66,10 @@ export default function TenderDetailPage({ params }: { params: { id: string } })
     setLoading(true);
     try {
       const [tenderRes, biddersRes] = await Promise.all([
-        axios.get(`${STRAPI}/api/tenders/${params.id}?populate=*`),
+        axios.get(`${STRAPI}/api/tenders?filters[id][$eq]=${params.id}&populate=*`),
         axios.get(`${STRAPI}/api/bidder-applications?filters[tender][id][$eq]=${params.id}&populate[documents]=*`),
       ]);
-      setTender(tenderRes.data.data);
+      setTender(tenderRes.data.data[0]);
       setBidders(biddersRes.data.data || []);
     } catch (err) {
       console.error("Error fetching tender/bidders:", err);
@@ -104,7 +102,7 @@ export default function TenderDetailPage({ params }: { params: { id: string } })
     const bidderIds = bidders.map((b) => b.id);
     const biddersInit: BidderProgress[] = bidders.map((b) => ({
       id: b.id,
-      name: b.attributes.bidderName || "Bidder",
+      name: b.bidderName || "Bidder",
       status: "pending",
     }));
 
@@ -123,7 +121,7 @@ export default function TenderDetailPage({ params }: { params: { id: string } })
           prev.map((b) => b.id === bidder.id ? { ...b, status: "processing" } : b)
         );
 
-        await runStagesAnimation(bidder.attributes.bidderName || "Bidder", bidder.id);
+        await runStagesAnimation(bidder.bidderName || "Bidder", bidder.id);
 
         setBidderProgress((prev) =>
           prev.map((b) => b.id === bidder.id ? { ...b, status: "done" } : b)
@@ -146,16 +144,16 @@ export default function TenderDetailPage({ params }: { params: { id: string } })
 
   const filteredBidders = bidders.filter((b) => {
     if (statusFilter === "All") return true;
-    return b.attributes.verificationStatus === statusFilter;
+    return b.verificationStatus === statusFilter;
   });
 
   // Summary metrics
   const total = bidders.length;
-  const verified = bidders.filter((b) => b.attributes.verificationStatus === "Verified").length;
-  const pending = bidders.filter((b) => !b.attributes.verificationStatus || b.attributes.verificationStatus === "Pending").length;
-  const highRisk = bidders.filter((b) => b.attributes.riskLevel === "High").length;
-  const critical = bidders.filter((b) => b.attributes.riskLevel === "Critical").length;
-  const rejected = bidders.filter((b) => b.attributes.verificationStatus === "Rejected").length;
+  const verified = bidders.filter((b) => b.verificationStatus === "Verified").length;
+  const pending = bidders.filter((b) => !b.verificationStatus || b.verificationStatus === "Pending").length;
+  const highRisk = bidders.filter((b) => b.riskLevel === "High").length;
+  const critical = bidders.filter((b) => b.riskLevel === "Critical").length;
+  const rejected = bidders.filter((b) => b.verificationStatus === "Rejected").length;
 
   if (loading) {
     return (
@@ -181,7 +179,7 @@ export default function TenderDetailPage({ params }: { params: { id: string } })
     );
   }
 
-  const tData = tender.attributes;
+  const tData = tender;
 
   return (
     <AppShell
@@ -306,7 +304,7 @@ export default function TenderDetailPage({ params }: { params: { id: string } })
               </tr>
             ) : (
               filteredBidders.map((bidder) => {
-                const a = bidder.attributes;
+                const a = bidder;
                 return (
                   <tr key={bidder.id} className="hover:bg-slate-25 transition-colors">
                     <td className="px-4 py-3">

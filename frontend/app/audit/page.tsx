@@ -10,15 +10,13 @@ const STRAPI = process.env.NEXT_PUBLIC_STRAPI_URL || "http://localhost:1337";
 
 type LogEntry = {
   id: number;
-  attributes: {
-    action: string;
-    timestamp: string;
-    aiSource?: string;
-    riskLevel?: string;
-    complianceScore?: number;
-    detailsLog?: any;
-    bidder?: { data: { attributes: { bidderName: string; companyName?: string } } };
-  };
+  action: string;
+  timestamp: string;
+  aiSource?: string;
+  riskLevel?: string;
+  complianceScore?: number;
+  detailsLog?: any;
+  bidder?: { bidderName: string; companyName?: string };
 };
 
 function getActionIcon(action: string) {
@@ -140,8 +138,8 @@ export default function AuditPage() {
                   </div>
                 ))
                 : logs.map((log, i) => {
-                  const la = log.attributes;
-                  const bidderName = la.bidder?.data?.attributes?.bidderName;
+                  const la = log;
+                  const bidderName = la.bidder?.bidderName;
                   return (
                     <div key={log.id} className={cn("relative flex gap-4 pl-12 pb-5", i === logs.length - 1 && "pb-0")}>
                       <div className="absolute left-3.5 -translate-x-1/2 w-3 h-3 rounded-full bg-white border-2 border-navy-400 z-10" />

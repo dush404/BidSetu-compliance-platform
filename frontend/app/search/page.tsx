@@ -13,7 +13,7 @@ const STRAPI = process.env.NEXT_PUBLIC_STRAPI_URL || "http://localhost:1337";
 
 type Tender = {
   id: number;
-  attributes: {
+  
     title: string;
     tenderId: string;
     statusId: string;
@@ -23,7 +23,6 @@ type Tender = {
     publishedDate?: string;
     createdAtDate?: string;
     description?: any;
-  };
 };
 
 const RECENT_KEY = "atc_recent_searches";
@@ -91,8 +90,8 @@ export default function SearchPage() {
   const handleTenderClick = (tender: Tender) => {
     saveRecent(RECENT_TENDERS_KEY, {
       id: tender.id,
-      title: tender.attributes.title,
-      tenderId: tender.attributes.tenderId,
+      title: tender.title,
+      tenderId: tender.tenderId,
     });
     router.push(`/tender/${tender.id}`);
   };
@@ -274,7 +273,7 @@ export default function SearchPage() {
 }
 
 function TenderRow({ tender, onClick }: { tender: Tender; onClick: () => void }) {
-  const { title, tenderId, statusId, bidderCount, department, closingDate, publishedDate } = tender.attributes;
+  const { title, tenderId, statusId, bidderCount, department, closingDate, publishedDate } = tender;
 
   return (
     <div

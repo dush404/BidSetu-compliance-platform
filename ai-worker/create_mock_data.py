@@ -12,8 +12,30 @@ Usage:
 
 import os
 import sys
+from pathlib import Path
 from typing import Any
+
 import requests
+
+
+def load_env_file() -> None:
+    """Load environment variables from the local .env file if present."""
+    env_file = Path(__file__).resolve().with_name(".env")
+    if not env_file.exists():
+        return
+
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+
+load_env_file()
 
 STRAPI_URL = os.getenv("STRAPI_URL", "http://localhost:1337/api").rstrip("/")
 API_TOKEN = os.getenv("STRAPI_API_TOKEN", os.getenv("STRAPI_API_KEY", ""))
