@@ -142,7 +142,7 @@ export function AiWorkerStatus({ compact = false }: { compact?: boolean }) {
                   "font-medium",
                   state.kind === "offline"
                     ? "text-bad"
-                    : state.isOllama
+                    : state.kind === "online" && state.isOllama
                       ? "font-semibold text-indigo-700 dark:text-indigo-300"
                       : "text-foreground"
                 )}

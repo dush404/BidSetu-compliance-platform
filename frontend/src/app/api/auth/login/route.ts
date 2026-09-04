@@ -35,5 +35,12 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ ok: true, user });
+  const res = NextResponse.json({ ok: true, user });
+  res.cookies.set("atc_role", user.role, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+  });
+  return res;
 }

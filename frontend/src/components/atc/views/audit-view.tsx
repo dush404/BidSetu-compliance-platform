@@ -1,15 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  Activity,
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Landmark,
   RefreshCw,
   ScrollText,
   ShieldCheck,
   UserCheck,
+  WifiOff,
   XCircle,
 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -21,6 +25,183 @@ import { Reveal, Stagger, StaggerItem } from "../motion";
 import { StatusPill } from "../status-pill";
 import { EmptyState } from "../empty-state";
 import { cn } from "@/lib/utils";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface LogEvent {
+  ts: string;
+  stage: string;
+  level: string;
+  msg: string;
+  data: Record<string, unknown>;
+}
+
+// ── Pipeline stage config ─────────────────────────────────────────────────────
+
+const STAGES = [
+  { key: "FETCH", label: "Fetch", color: "text-blue-500", bg: "bg-blue-500/10" },
+  { key: "DB", label: "DB Checks", color: "text-cyan-500", bg: "bg-cyan-500/10" },
+  { key: "RULES", label: "Rules", color: "text-yellow-500", bg: "bg-yellow-500/10" },
+  { key: "AI", label: "AI", color: "text-purple-500", bg: "bg-purple-500/10" },
+  { key: "SAVE", label: "Save", color: "text-emerald-500", bg: "bg-emerald-500/10" },
+  { key: "DONE", label: "Done", color: "text-ok", bg: "bg-ok/10" },
+] as const;
+
+function stageConfig(stage: string) {
+  const key = stage.split(":")[0];
+  return STAGES.find((s) => s.key === key) ?? { key, label: stage, color: "text-muted-foreground", bg: "bg-muted" };
+}
+
+function levelColor(level: string) {
+  if (level === "ERROR") return "text-bad";
+  if (level === "WARN") return "text-warn";
+  return "text-muted-foreground";
+}
+
+// ── Live Pipeline Monitor ─────────────────────────────────────────────────────
+
+function PipelineMonitor() {
+  const [events, setEvents] = useState<LogEvent[]>([]);
+  const [connected, setConnected] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [activeStage, setActiveStage] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const esRef = useRef<EventSource | null>(null);
+  const pauseScroll = useRef(false);
+
+  // Load recent history on mount
+  useEffect(() => {
+    fetch("/api/dev/logs?limit=100")
+      .then((r) => r.json())
+      .then((d: { events?: LogEvent[] }) => {
+        if (Array.isArray(d.events)) setEvents(d.events);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Open SSE stream
+  useEffect(() => {
+    const es = new EventSource("/api/dev/log-stream");
+    esRef.current = es;
+
+    es.onopen = () => setConnected(true);
+    es.onerror = () => setConnected(false);
+
+    es.onmessage = (e) => {
+      try {
+        const ev = JSON.parse(e.data as string) as LogEvent;
+        setEvents((prev) => [...prev.slice(-299), ev]);
+        setActiveStage(ev.stage.split(":")[0]);
+      } catch {}
+    };
+
+    return () => {
+      es.close();
+      setConnected(false);
+    };
+  }, []);
+
+  // Auto-scroll to bottom unless user is hovering
+  useEffect(() => {
+    if (!pauseScroll.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [events]);
+
+  const clearLogs = () => setEvents([]);
+
+  return (
+    <div className="card-hairline overflow-hidden">
+      {/* Monitor header */}
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+        <div className="flex items-center gap-2">
+          <Activity className={cn("size-4", connected ? "text-ok animate-pulse" : "text-muted-foreground")} />
+          <span className="text-[14px] font-semibold tracking-tight">Pipeline Monitor</span>
+          <span className={cn(
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+            connected ? "bg-ok/10 text-ok" : "bg-muted text-muted-foreground"
+          )}>
+            {connected ? "● LIVE" : "○ OFFLINE"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={clearLogs}
+            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Clear
+          </button>
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            className="flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[12px] text-muted-foreground hover:bg-muted"
+          >
+            {collapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+            {collapsed ? "Expand" : "Collapse"}
+          </button>
+        </div>
+      </header>
+
+      {/* Pipeline stage progress bar */}
+      {!collapsed && (
+        <div className="flex items-center gap-1 border-b border-border bg-muted/30 px-4 py-2">
+          {STAGES.map((s, i) => {
+            const isActive = activeStage === s.key;
+            const isPast = activeStage
+              ? STAGES.findIndex((x) => x.key === activeStage) > i
+              : false;
+            return (
+              <div key={s.key} className="flex items-center gap-1 flex-1 min-w-0">
+                <span className={cn(
+                  "truncate rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition-all",
+                  isActive ? `${s.bg} ${s.color} scale-105` : isPast ? "bg-ok/10 text-ok" : "bg-muted text-muted-foreground/50"
+                )}>
+                  {s.label}
+                </span>
+                {i < STAGES.length - 1 && (
+                  <div className={cn("h-px flex-1 rounded", isPast || isActive ? "bg-ok/40" : "bg-border")} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Terminal feed */}
+      {!collapsed && (
+        <div
+          className="max-h-72 overflow-y-auto bg-[hsl(var(--card))] p-3 font-mono text-[11px] [scrollbar-width:thin]"
+          onMouseEnter={() => { pauseScroll.current = true; }}
+          onMouseLeave={() => { pauseScroll.current = false; }}
+        >
+          {events.length === 0 && (
+            <p className="text-muted-foreground/60 py-4 text-center">
+              {connected ? "Waiting for pipeline events…" : "Connecting to AI worker…"}
+            </p>
+          )}
+          {events.map((ev, i) => {
+            const s = stageConfig(ev.stage);
+            const time = new Date(ev.ts).toLocaleTimeString("en-IN", { hour12: false });
+            return (
+              <div key={i} className="flex items-start gap-2 py-0.5 hover:bg-muted/40 rounded px-1">
+                <span className="shrink-0 text-muted-foreground/50">{time}</span>
+                <span className={cn("shrink-0 rounded px-1 font-semibold", s.color)}>[{ev.stage}]</span>
+                <span className={cn("flex-1 break-all", levelColor(ev.level))}>{ev.msg}</span>
+              </div>
+            );
+          })}
+          <div ref={bottomRef} />
+        </div>
+      )}
+
+      {!connected && !collapsed && (
+        <div className="flex items-center gap-2 border-t border-border px-5 py-2 text-[11px] text-muted-foreground">
+          <WifiOff className="size-3.5" />
+          AI worker is offline — logs will stream once reconnected.
+        </div>
+      )}
+    </div>
+  );
+}
 
 function actionVisual(e: AuditEntry) {
   if (e.decision === "DISQUALIFY")
@@ -36,6 +217,8 @@ function actionVisual(e: AuditEntry) {
 
 export function AuditView() {
   const navigate = useAppStore((s) => s.navigate);
+  const user = useAppStore((s) => s.user);
+  const isDeveloper = user?.role === "DEVELOPER";
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -59,6 +242,13 @@ export function AuditView() {
 
   return (
     <div className="space-y-7">
+      {/* Live pipeline monitor — exclusively visible to developers */}
+      {isDeveloper && (
+        <Reveal delay={0.04}>
+          <PipelineMonitor />
+        </Reveal>
+      )}
+
       <PageHeader
         eyebrow={
           <span className="text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">

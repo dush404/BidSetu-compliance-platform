@@ -30,10 +30,10 @@ services:
     environment:
       - STRAPI_URL=http://strapi:1337
       - STRAPI_API_TOKEN=${STRAPI_API_TOKEN:-0dc570202be092f7b0a30ce9f154aed05e1dfe231d26c98e90491bb81f83ca7f894a809abac5dd5519af189d576fad82f44d0f218c6e0b475954d97248ef00b4f82b4c0a28dfd1e0e8eebc8d0eaba47c492b15757dcabb19d8f3b269ea649c348e1546e21f509a170a3165cdb045c147b9ef89b05478d3a789500ed43d233ee3}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-AQ.Ab8RN6IS5kF_fK1tMHlmlD3OClC_DFrp0E70jB0wmm5Go4o_0w}
-      - AI_PROVIDER=${AI_PROVIDER:-auto}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:14b}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

@@ -48,7 +48,7 @@ async function probeWorker(): Promise<WorkerProbe> {
         provider,
         gemini: isGemini,
         ollama: isOllama,
-        ollamaModel: data.ollama_model ?? "qwen3:14b",
+        ollamaModel: data.ollama_model ?? "qwen2.5:7b",
       };
     } catch {
       continue;

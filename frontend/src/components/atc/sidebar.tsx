@@ -29,6 +29,7 @@ import {
   type View,
 } from "@/lib/store";
 import { useT } from "@/lib/i18n";
+import { api } from "@/lib/api";
 import { Mark } from "./motion";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -85,6 +86,7 @@ export function SidebarContent({
   };
 
   const handleSignOut = () => {
+    void api.logout().catch(() => null);
     signOut();
     onNavigate?.();
     toast(t("sign_out"), { description: t("sign_out_sub") });

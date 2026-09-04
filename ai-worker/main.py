@@ -1,10 +1,14 @@
 import json
 import os
 import asyncio
+import threading
+from collections import deque
+from datetime import datetime, timezone
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Any
 import base64
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -19,7 +23,7 @@ if not GEMINI_API_KEY:
     print("WARNING: GEMINI_API_KEY not found. Add it to /ai-worker/.env")
 
 # AI Configuration (Supports Gemini or Local Ollama e.g. qwen3:14b)
-AI_PROVIDER = os.getenv("AI_PROVIDER", "auto").lower()  # "gemini", "ollama", or "auto"
+AI_PROVIDER = os.getenv("AI_PROVIDER", "ollama" if not GEMINI_API_KEY else "auto").lower()
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:14b")
 
@@ -51,6 +55,37 @@ app.add_middleware(
 )
 
 
+# ── Log Event Bus ──────────────────────────────────────────────────────────────
+
+LOG_MAX = 300
+_log_deque: deque = deque(maxlen=LOG_MAX)
+_log_lock = threading.Lock()
+_sse_subscribers: List[asyncio.Queue] = []
+_sse_lock = threading.Lock()
+
+
+def emit_log(stage: str, msg: str, level: str = "INFO", data: Optional[dict] = None) -> None:
+    """Append a structured log event and broadcast to all SSE subscribers."""
+    event = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "stage": stage,
+        "level": level,
+        "msg": msg,
+        "data": data or {},
+    }
+    with _log_lock:
+        _log_deque.append(event)
+    with _sse_lock:
+        dead = []
+        for q in _sse_subscribers:
+            try:
+                q.put_nowait(event)
+            except Exception:
+                dead.append(q)
+        for q in dead:
+            _sse_subscribers.remove(q)
+
+
 # ── Request/Response models ────────────────────────────────────────────────────
 
 class VerifyBidderRequest(BaseModel):
@@ -77,38 +112,16 @@ def image_to_base64(image_path: str) -> str:
 def extract_data_from_image(image_path: str) -> dict:
     if not model:
         raise HTTPException(status_code=503, detail="Gemini API not configured (Missing API Key)")
-
     try:
-        prompt = """
-You are an expert government document analyzer.
-Extract the following fields from this image of a government certificate (GST, PAN, Udyam, etc.):
-1. Company Name
-2. GSTIN (if present)
-3. PAN (if present)
-4. Udyam ID (if present)
-5. Registration Date
-6. Status (Active, Cancelled, Expired, or Unknown)
-
-Return ONLY a valid JSON object. Do not add markdown or explanations.
-Example:
-{
-  "company_name": "ABC Pvt Ltd",
-  "gstin": "27AABCU9603R1Z5",
-  "pan": "AABCU9603R",
-  "udyam_id": "UDYAM-...",
-  "registration_date": "2023-01-01",
-  "status": "Active"
-}
-"""
-        image_part = {
-            "mime_type": "image/png",
-            "data": image_to_base64(image_path),
-        }
+        prompt = (
+            "You are an expert government document analyzer.\n"
+            "Extract: Company Name, GSTIN, PAN, Udyam ID, Registration Date, Status.\n"
+            "Return ONLY valid JSON. No markdown."
+        )
+        image_part = {"mime_type": "image/png", "data": image_to_base64(image_path)}
         response = model.generate_content([prompt, image_part])
-        content = response.text
-        content = content.replace("```json", "").replace("```", "").strip()
+        content = response.text.replace("```json", "").replace("```", "").strip()
         return json.loads(content)
-
     except Exception as e:
         print(f"Gemini AI Error: {e}")
         raise HTTPException(status_code=500, detail=f"AI Extraction failed: {str(e)}")
@@ -124,11 +137,9 @@ def quick_verify(extracted: dict) -> dict:
         blacklist_record = check_blacklist(gstin, pan)
     except StrapiClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-
     gst_status = (gst_data or {}).get("statusId") or (gst_data or {}).get("status")
     udyam_status = (udyam_data or {}).get("statusId") or (udyam_data or {}).get("status")
     is_blacklisted = blacklist_record is not None
-
     if is_blacklisted:
         score, risk = 0, "Critical"
     else:
@@ -138,7 +149,6 @@ def quick_verify(extracted: dict) -> dict:
         if udyam_status == "Expired":
             score -= 20
         risk = "Critical" if is_blacklisted else ("Low" if score >= 80 else "Medium" if score >= 50 else "High")
-
     details = {
         "gst_check": "Pass" if gst_status == "Active" else "Fail/Not Found",
         "pan_check": "Checked via blacklist" if pan else "Not Provided",
@@ -155,7 +165,7 @@ def quick_verify(extracted: dict) -> dict:
     }
 
 
-# ── Endpoints ──────────────────────────────────────────────────────────────────
+# ── Core Endpoints ─────────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health():
@@ -163,9 +173,8 @@ def health():
         source_label = f"Ollama ({OLLAMA_MODEL})"
     elif AI_PROVIDER == "gemini":
         source_label = f"Gemini ({ACTIVE_MODEL_NAME})"
-    else:  # auto
+    else:
         source_label = f"Gemini ({ACTIVE_MODEL_NAME})" if model else f"Ollama ({OLLAMA_MODEL})"
-
     return {
         "status": "ok",
         "provider": AI_PROVIDER,
@@ -187,19 +196,61 @@ def switch_provider(req: SwitchProviderRequest):
         OLLAMA_MODEL = req.ollama_model
     if req.ollama_url:
         OLLAMA_URL = req.ollama_url.rstrip("/")
+    emit_log("SYSTEM", f"Provider switched to {AI_PROVIDER} (model: {OLLAMA_MODEL})")
     return health()
 
+
+# ── Log Stream Endpoints ───────────────────────────────────────────────────────
+
+@app.get("/logs")
+def get_logs(limit: int = 150):
+    """Return the last N buffered log events as JSON."""
+    with _log_lock:
+        events = list(_log_deque)
+    return {"events": events[-limit:], "total": len(events)}
+
+
+@app.get("/log-stream")
+async def log_stream():
+    """Server-Sent Events stream — pushes new log events to the client in real-time."""
+    queue: asyncio.Queue = asyncio.Queue(maxsize=500)
+    with _sse_lock:
+        _sse_subscribers.append(queue)
+    with _log_lock:
+        boot_events = list(_log_deque)
+
+    async def generator():
+        try:
+            for ev in boot_events:
+                yield f"data: {json.dumps(ev)}\n\n"
+            while True:
+                try:
+                    ev = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    yield f"data: {json.dumps(ev)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        finally:
+            with _sse_lock:
+                if queue in _sse_subscribers:
+                    _sse_subscribers.remove(queue)
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ── Verification Endpoints ─────────────────────────────────────────────────────
 
 @app.post("/extract")
 async def extract_file(file: UploadFile = File(...)):
     """Extract structured data from an uploaded government document image."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file uploaded")
-
     temp_path = f"temp_{file.filename}"
     with open(temp_path, "wb") as buffer:
         buffer.write(await file.read())
-
     try:
         extracted_data = extract_data_from_image(temp_path)
         verification = quick_verify(extracted_data)
@@ -224,31 +275,26 @@ async def verify_single_bidder(bidder_id: str):
             ai_provider=AI_PROVIDER,
             ollama_url=OLLAMA_URL,
             ollama_model=OLLAMA_MODEL,
+            log_fn=emit_log,
         )
         return result
     except Exception as exc:
+        emit_log("ERROR", f"Verification failed for {bidder_id}: {exc}", level="ERROR")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/verify-all-bidders")
 async def verify_all_bidders(request: VerifyAllRequest):
-    """
-    Run full compliance verification for multiple bidders concurrently.
-    Uses semaphore to limit concurrency and avoid overloading Strapi/Gemini.
-    """
+    """Run full compliance verification for multiple bidders concurrently."""
     if not request.ids:
         raise HTTPException(status_code=400, detail="No bidder IDs provided")
-
-    MAX_CONCURRENT = 3  # Conservative limit for API rate limiting
+    MAX_CONCURRENT = 3
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
-
     tasks = [
-        run_verification_async(bidder_id, semaphore, model=model)
+        run_verification_async(bidder_id, semaphore, model=model, log_fn=emit_log)
         for bidder_id in request.ids
     ]
-
     results = await asyncio.gather(*tasks, return_exceptions=True)
-
     output = []
     for bidder_id, result in zip(request.ids, results):
         if isinstance(result, Exception):
@@ -261,7 +307,6 @@ async def verify_all_bidders(request: VerifyAllRequest):
             })
         else:
             output.append(result)
-
     return {
         "total": len(request.ids),
         "completed": len([r for r in output if "error" not in r]),
@@ -277,11 +322,9 @@ async def verify_legacy(gstin: str):
         is_blacklisted = check_blacklist(gstin, None) is not None
     except StrapiClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
-
     gst_status = (gst_data or {}).get("statusId") or "Not Found"
     score = 100 if gst_status == "Active" else 30
     risk = "Low" if score >= 80 else "High"
-
     return {
         "gstin": gstin,
         "company_name": (gst_data or {}).get("legalName", "Unknown"),

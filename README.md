@@ -10,10 +10,11 @@
 4. [What Is Built & Functional (Present)](#-what-is-built--functional-present)
 5. [What Is Not Present & Production Roadmap (Gaps & Limitations)](#-what-is-not-present--production-roadmap-gaps--limitations)
 6. [Simulated Statutory Registries](#-simulated-statutory-registries)
-7. [Quick Start Guide (Local & Docker)](#-quick-start-guide-local--docker)
-8. [Local Ollama Setup (qwen3:14b)](#-local-ollama-setup-qwen314b)
-9. [Evaluation Demo Walkthrough](#-evaluation-demo-walkthrough)
-10. [Repository Structure](#-repository-structure)
+7. [Developer Console & Pipeline Diagnostics](#-developer-console--pipeline-diagnostics)
+8. [Quick Start Guide (Local & Docker)](#-quick-start-guide-local--docker)
+9. [Local Ollama Setup (qwen2.5:7b / qwen3:14b)](#-local-ollama-setup-qwen257b--qwen314b)
+10. [Evaluation Demo Walkthrough](#-evaluation-demo-walkthrough)
+11. [Repository Structure](#-repository-structure)
 
 ---
 
@@ -134,8 +135,12 @@ flowchart TB
 | **Cinematic Live Scanner** | ✅ **100% Functional** | Real-time multi-step verification animation evaluating each registry step-by-step. |
 | **Comprehensive Bidder Dossier** | ✅ **100% Functional** | Drill-down view showing submitted credentials vs verified values for all 8 registries. |
 | **Deterministic Rule Engine** | ✅ **100% Functional** | 8 statutory compliance checkers calculating compliance score, risk level, and recommendation. |
-| **Google Gemini 3.6 Flash** | ✅ **100% Functional** | Dynamic multi-model fallback (`gemini-3.6-flash` -> `gemini-flash-latest`). |
-| **Local Ollama (`qwen3:14b`)** | ✅ **100% Functional** | Air-gapped offline support with automated `<think>` reasoning tag sanitization. |
+| **Google Gemini 3.6 Flash** | ✅ **100% Functional** | Dynamic cloud LLM with automatic fallback (`gemini-3.6-flash` -> `gemini-flash-latest`). |
+| **Local Ollama (`qwen2.5:7b`)** | ✅ **100% Functional** | Air-gapped offline support with automated `<think>` reasoning tag sanitization & CPU fallback. |
+| **AI Priority Cascade** | ✅ **100% Functional** | Cloud-first (`Gemini → Ollama → Rules`) or Local-first (`Ollama → Gemini → Rules`) with visual UI badges. |
+| **Live Pipeline Monitor (SSE)** | ✅ **100% Functional** | Real-time Server-Sent Events monitor with visual milestone progress bar (`Fetch → DB → Rules → AI → Save → Done`). |
+| **Role-Based Isolation (RBAC)** | ✅ **100% Functional** | Developer console and live pipeline monitors are strictly isolated to Developer role (`HTTP 403` guarded). |
+| **Statutory Connector Config & Testing** | ✅ **100% Functional** | Dynamic URL/key config per registry + live HTTP latency/status test buttons in Developer settings. |
 | **Strapi v5 CMS Integration** | ✅ **100% Functional** | Full CRUD, relationship resolution, audit logging, and document parsing. |
 | **Procurement Officer Workbench** | ✅ **100% Functional** | Official qualification actions: `QUALIFY`, `CLARIFY`, and `DISQUALIFY` with officer notes. |
 | **Tamper-Evident Audit Trail** | ✅ **100% Functional** | Chronological log of automated AI verifications, scores, and officer decisions. |
@@ -187,6 +192,45 @@ The platform includes built-in simulated data reflecting real-world compliance s
 
 ---
 
+## 🛠️ Developer Console & Pipeline Diagnostics
+
+The platform includes a dedicated **Developer Console** designed for platform engineers to configure statutory integrations, switch AI modes, and diagnose verification pipelines in real-time.
+
+### 1. AI Priority Cascade
+The AI evaluation engine supports two primary execution strategies with automatic fallback:
+- **Cloud-First Cascade (`Gemini`)**:
+  $$\text{Gemini 3.6 Flash (Cloud)} \longrightarrow \text{Ollama Local (Fallback)} \longrightarrow \text{Deterministic Rule Engine}$$
+  If Gemini encounters rate limits or network dropouts, execution gracefully falls back to local Ollama, and ultimately to the rule engine.
+- **Local-First Cascade (`Ollama`)**:
+  $$\text{Ollama Local (qwen2.5:7b)} \longrightarrow \text{Gemini Cloud (Fallback)} \longrightarrow \text{Deterministic Rule Engine}$$
+  Ideal for air-gapped environments. If Ollama experiences GPU memory pressure, it automatically falls back to CPU mode, then Gemini, then the rule engine.
+- Visual badges on each mode card in Settings clearly communicate the active fallback cascade.
+
+### 2. Statutory Database Connector Configuration & Testing
+In **Platform Settings**, all 8 statutory registry connectors (GSTN, PAN, Udyam, EPFO, ESIC, DPIIT, NSIC, Debarment) can be configured dynamically:
+- **Accordion Configuration**: Click on any registry to supply a custom **API Base URL** and **API Key / Bearer Token** (persisted in local browser storage).
+- **Dynamic Mode Badge**: Transition dynamically from `Simulated` to `Live` when custom endpoints are provided.
+- **Test Connection**: Inline testing button pings the external API and reports live latency in milliseconds and HTTP status codes (e.g. `✓ 6ms · HTTP 200`).
+
+### 3. AI Connectivity & Health Probes
+- **Test Gemini**: Directly verifies Google Gemini API connectivity and reports model name and response latency.
+- **Test Ollama**: Directly verifies that the local Ollama instance is active and the specified model is loaded.
+
+### 4. Real-Time Pipeline Monitor (Live SSE Stream)
+Visible at the top of the **Audit Logs** view for developers (`developer@example.com`):
+- **Milestone Progress Bar**: Visually illuminates progress through each verification phase:
+  $$\text{Fetch} \longrightarrow \text{DB Checks} \longrightarrow \text{Rules} \longrightarrow \text{AI} \longrightarrow \text{Save} \longrightarrow \text{Done}$$
+- **Color-Coded Terminal Feed**:
+  - `[FETCH]` (Blue): Bidder record retrieval.
+  - `[DB:*]` (Cyan): Individual government database queries (GST, PAN, EPFO, etc.).
+  - `[RULES]` (Yellow): Compliance score and discrepancy computation.
+  - `[AI:OLLAMA]` / `[AI:GEMINI]` (Purple): LLM prompt execution and summary synthesis.
+  - `[SAVE]` (Emerald): Strapi and Prisma persistence.
+  - `[DONE]` (Green): Final verification outcome.
+- **Role-Based Isolation (RBAC)**: The live monitor is completely hidden from Procurement Officers (`officer@gov.in`), and server endpoints (`/api/dev/log-stream` & `/api/dev/logs`) strictly reject non-developer requests with `HTTP 403 Forbidden`.
+
+---
+
 ## 🚀 Quick Start Guide (Local & Docker)
 
 ### Option 1: 1-Click Windows Launch (Recommended for Evaluation)
@@ -196,6 +240,12 @@ Double-click **`start-all.bat`** in the project root. It will automatically star
 3. **Next.js Frontend** (`http://localhost:3000`)
 
 To cleanly kill all 3 services and release ports, double-click **`stop-all.bat`**.
+
+#### 🔄 Reset Demo & Clear Verification Cache:
+Whenever you want to restart the website from a clean slate:
+- Double-click **`reset-demo.bat`** in the root directory.
+- This resets all bidder verification statuses back to **Pending**, clears scores and audit logs, but **keeps all tenders, bidders, and government registries intact**.
+- Press `Ctrl + Shift + R` in the browser to refresh. All tenders and bidders will fetch fresh and be ready for live verification.
 
 ---
 
@@ -238,7 +288,7 @@ npm run dev
 
 ---
 
-## 🦙 Local Ollama Setup (`qwen3:14b`)
+## 🦙 Local Ollama Setup (`qwen2.5:7b` / `qwen3:14b`)
 
 For high-security defense or classified procurement tenders where cloud APIs cannot be used, the AI worker connects natively to local **Ollama**:
 
@@ -247,14 +297,15 @@ Verify Ollama is running and your model is loaded:
 ```powershell
 ollama list
 ```
+*(Recommended model for consumer GPUs/laptops: `ollama run qwen2.5:7b`)*
 
 ### 2. Configure Environment
-In [`ai-worker/.env`](file:///c:/SIH/Ge-compliance-platform/ai-worker/.env):
+In [`ai-worker/.env`](file:///c:/SIH/Ge-compliance-platform/ai-worker/.env) or Docker Compose:
 ```env
 # Change provider to local Ollama
 AI_PROVIDER=ollama
 OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=qwen3:14b
+OLLAMA_MODEL=qwen2.5:7b
 ```
 
 ### 3. Verify Health
@@ -263,14 +314,14 @@ Visit `http://localhost:8000/health`:
 {
   "status": "ok",
   "provider": "ollama",
-  "ai_source": "Ollama (qwen3:14b)",
+  "ai_source": "Ollama (qwen2.5:7b)",
   "ollama_url": "http://localhost:11434",
-  "ollama_model": "qwen3:14b"
+  "ollama_model": "qwen2.5:7b"
 }
 ```
 
 > [!TIP]
-> If Ollama reports `CUDA error: shared object initialization failed` on Windows with the 14.8B model, run Ollama in CPU mode via `$env:OLLAMA_NUM_GPU = 0; ollama serve`.
+> The AI Worker includes automatic GPU $\rightarrow$ CPU fallback. If CUDA encounters buffer overruns or shared object memory errors on Windows, the worker automatically re-queries Ollama in CPU mode (`num_gpu: 0`) without dropping the request.
 
 ---
 
@@ -327,3 +378,4 @@ Ge-compliance-platform/
     ├── rule_engine.py       # Statutory compliance scoring logic
     └── strapi_client.py     # REST client for Strapi database integration
 ```
+That's all-------------->

@@ -27,7 +27,7 @@ export function handleGovCollection(collection: string) {
       return NextResponse.json(
         strapiResponse(
           matched.map((m) =>
-            strapiItem((m as { __id: string }).__id, m.data as Record<string, unknown>)
+            strapiItem((m as unknown as { __id: string }).__id, m.data as Record<string, unknown>)
           )
         )
       );

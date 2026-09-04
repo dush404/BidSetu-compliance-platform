@@ -52,6 +52,11 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  logout: () =>
+    request<{ ok: boolean }>("/api/auth/logout", {
+      method: "POST",
+    }),
+
   getTenders: (q?: string) =>
     request<TendersResponse>(
       `/api/tenders${q ? `?q=${encodeURIComponent(q)}` : ""}`
