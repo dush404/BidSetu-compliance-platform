@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 STRAPI_URL = os.getenv("STRAPI_URL", "http://localhost:1337").rstrip("/")
-STRAPI_API_KEY = os.getenv("STRAPI_API_KEY", "")
+STRAPI_API_KEY = os.getenv("STRAPI_API_TOKEN") or os.getenv("STRAPI_API_KEY", "")
 REQUEST_TIMEOUT = 10
 
 HEADERS = {
@@ -59,7 +59,10 @@ def _put(endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         response.raise_for_status()
         return response.json()
     except (requests.RequestException, ValueError) as exc:
-        raise StrapiClientError(f"Strapi PUT failed [{endpoint}]: {exc}") from exc
+        detail = ""
+        if isinstance(exc, requests.HTTPError) and exc.response is not None:
+            detail = f" — {exc.response.text[:500]}"
+        raise StrapiClientError(f"Strapi PUT failed [{endpoint}]: {exc}{detail}") from exc
 
 
 def _post(endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -74,7 +77,10 @@ def _post(endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         response.raise_for_status()
         return response.json()
     except (requests.RequestException, ValueError) as exc:
-        raise StrapiClientError(f"Strapi POST failed [{endpoint}]: {exc}") from exc
+        detail = ""
+        if isinstance(exc, requests.HTTPError) and exc.response is not None:
+            detail = f" — {exc.response.text[:500]}"
+        raise StrapiClientError(f"Strapi POST failed [{endpoint}]: {exc}{detail}") from exc
 
 
 # ── Tender ──────────────────────────────────────────────────────────────────
@@ -82,8 +88,10 @@ def _post(endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
 def get_tender(tender_id: int) -> dict[str, Any] | None:
     """Return tender attributes by Strapi numeric ID."""
     try:
-        data = _get(f"tenders/{tender_id}", {"populate": "*"})
-        record = data.get("data", {})
+        data = _get("tenders", {"filters[id][$eq]": str(tender_id), "populate": "*"})
+        records = data.get("data", [])
+        if not records: return None
+        record = records[0]
         return record.get("attributes", record)
     except StrapiClientError:
         return None
@@ -96,7 +104,7 @@ def get_bidders_for_tender(tender_id: int) -> list[dict[str, Any]]:
             "bidder-applications",
             {
                 "filters[tender][id][$eq]": str(tender_id),
-                "populate[documents]": "*",
+                "populate": "*",
                 "pagination[limit]": "100",
             },
         )
@@ -105,12 +113,39 @@ def get_bidders_for_tender(tender_id: int) -> list[dict[str, Any]]:
         return []
 
 
-def get_bidder(bidder_id: int) -> dict[str, Any] | None:
-    """Return a single bidder-application by Strapi numeric ID."""
+def get_bidder(bidder_id: str | int) -> dict[str, Any] | None:
+    """Return a single bidder-application by Strapi numeric ID.
+
+    Strapi 5 item routes require documentId, while the UI uses numeric IDs.
+    Querying by the numeric id keeps both sides compatible.
+    """
     try:
-        data = _get(f"bidder-applications/{bidder_id}", {"populate[documents]": "*", "populate[tender]": "*"})
-        record = data.get("data", {})
+        data = _get(f"bidder-applications/{bidder_id}", {"populate": "*"})
+        records = data.get("data", [])
+        if not records:
+            return None
+        record = records[0] if isinstance(records, list) else records
         attrs = record.get("attributes", record)
+        attrs["documentId"] = record.get("documentId")
+        attrs["_id"] = record.get("id", bidder_id)
+        return attrs
+    except StrapiClientError:
+        try:
+            data = _get(
+                "bidder-applications",
+                {
+                    "filters[id][$eq]": str(bidder_id),
+                    "populate": "*",
+                    "pagination[limit]": "1",
+                },
+            )
+            records = data.get("data", [])
+        except StrapiClientError:
+            return None
+        if not records: return None
+        record = records[0]
+        attrs = record.get("attributes", record)
+        attrs["documentId"] = record.get("documentId")
         attrs["_id"] = record.get("id", bidder_id)
         return attrs
     except StrapiClientError:
@@ -197,16 +232,21 @@ def check_blacklist(gstin: str | None, pan: str | None, company_name: str | None
 # ── Saving results ────────────────────────────────────────────────────────────
 
 def save_verification_result(
-    bidder_id: int,
+    bidder_id: str | int,
     result: dict[str, Any],
 ) -> None:
     """Update the bidder-application record with the verification result."""
+    recommendation = result.get("recommendation")
+    status_by_recommendation = {
+        "QUALIFY": "Verified",
+        "DISQUALIFY": "Rejected",
+        "MANUAL_REVIEW": "Manual Review",
+    }
     payload = {
         "data": {
-            "verificationStatus": result.get("recommendation", "Manual Review")
-                .replace("QUALIFY", "Verified")
-                .replace("DISQUALIFY", "Rejected")
-                .replace("MANUAL_REVIEW", "Manual Review"),
+            "verificationStatus": status_by_recommendation.get(
+                recommendation, "Manual Review"
+            ),
             "complianceScore": result.get("overallScore"),
             "riskLevel": result.get("riskLevel"),
             "aiRecommendation": result.get("aiSummary", ""),
@@ -214,22 +254,30 @@ def save_verification_result(
             "lastVerifiedAt": result.get("verifiedAt"),
         }
     }
-    _put(f"bidder-applications/{bidder_id}", payload)
+    bidder = get_bidder(bidder_id)
+    document_id = bidder.get("documentId") if bidder else None
+    if not document_id:
+        raise StrapiClientError(f"Bidder {bidder_id} has no Strapi documentId")
+    _put(f"bidder-applications/{document_id}", payload)
 
 
-def create_verification_log(bidder_id: int, action: str, details: dict[str, Any]) -> None:
+def create_verification_log(bidder_id: str | int, action: str, details: dict[str, Any]) -> None:
     """Create a VerificationLog entry."""
-    try:
-        _post("verification-logs", {
-            "data": {
-                "bidder": bidder_id,
-                "action": action,
-                "timestamp": details.get("verifiedAt"),
-                "complianceScore": details.get("overallScore"),
-                "riskLevel": details.get("riskLevel"),
-                "aiSource": "Gemini 1.5 Flash",
-                "detailsLog": details,
-            }
-        })
-    except StrapiClientError as exc:
-        print(f"Warning: Could not create verification log: {exc}")
+    bidder = get_bidder(bidder_id)
+    document_id = bidder.get("documentId") if bidder else None
+    if not document_id:
+        raise StrapiClientError(f"Bidder {bidder_id} has no documentId for verification log")
+
+    log_payload = {
+        "data": {
+            "bidder": {"connect": [document_id]},
+            "action": action,
+            "timestamp": details.get("verifiedAt"),
+            "complianceScore": details.get("overallScore"),
+            # Verification logs support Low/Medium/High; Critical is recorded in detailsLog.
+            "riskLevel": details.get("riskLevel") if details.get("riskLevel") != "Critical" else "High",
+            "aiSource": details.get("aiSource", "AI Worker"),
+            "detailsLog": details,
+        }
+    }
+    _post("verification-logs", log_payload)

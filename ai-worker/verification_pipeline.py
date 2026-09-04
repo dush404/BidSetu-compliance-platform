@@ -2,7 +2,6 @@
 Full verification pipeline for a single bidder.
 Orchestrates: data fetch → rule engine → score → AI text → save.
 """
-
 import json
 import asyncio
 from datetime import datetime, timezone
@@ -43,40 +42,15 @@ def _generate_ai_summary(
     recommendation: str,
     checks: dict,
     model=None,
-) -> tuple[str, int]:
+    ai_provider: str = "auto",
+    ollama_url: str = "http://localhost:11434",
+    ollama_model: str = "qwen3:14b",
+) -> tuple[str, int, str]:
     """
-    Use LLM to generate a human-readable summary.
-    Falls back to template-based text if model unavailable.
-    Returns (summary_text, confidence_pct).
+    Use LLM (Ollama or Gemini) to generate a human-readable summary.
+    Falls back to template-based text if models are unavailable.
+    Returns (summary_text, confidence_pct, source_label).
     """
-    if model is None:
-        # Template fallback — no LLM
-        fail_checks = [k for k, v in checks.items() if v.get("status") == "FAIL"]
-        review_checks = [k for k, v in checks.items() if v.get("status") == "REVIEW"]
-        pass_checks = [k for k, v in checks.items() if v.get("status") == "PASS"]
-
-        if recommendation == "QUALIFY":
-            text = (
-                f"All mandatory compliance requirements for {company_name} are satisfied. "
-                f"Passed {len(pass_checks)} checks with a compliance score of {score}/100."
-            )
-        elif recommendation == "MANUAL_REVIEW":
-            issues = ", ".join(review_checks + fail_checks)
-            text = (
-                f"{company_name} has passed most checks ({len(pass_checks)} passed) "
-                f"but requires review for: {issues}. Compliance score: {score}/100."
-            )
-        else:
-            issues = ", ".join(fail_checks)
-            text = (
-                f"Disqualification recommended for {company_name}. "
-                f"Critical failures in: {issues}. Compliance score: {score}/100. "
-                f"Risk level: {risk}."
-            )
-        confidence = min(95, score + 10) if recommendation == "QUALIFY" else max(60, 100 - score)
-        return text, confidence
-
-    # LLM path — used only for text, rule_engine decides compliance
     prompt = f"""You are an AI assistant for a government procurement officer.
 Write a brief, professional 2-3 sentence summary of this bidder verification result.
 DO NOT make any legal judgement — only summarise the facts.
@@ -90,17 +64,95 @@ Checks:
 
 Write the summary in plain English. Do not use markdown."""
 
-    try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        confidence = min(95, score + 10)
-        return text, confidence
-    except Exception as exc:
-        print(f"AI summary generation failed: {exc}")
-        return _generate_ai_summary(company_name, score, risk, recommendation, checks, model=None)
+    confidence = min(95, score + 10) if recommendation == "QUALIFY" else max(60, 100 - score)
+
+    # Helper: try Ollama
+    def try_ollama() -> str | None:
+        try:
+            import re
+            resp = requests.post(
+                f"{ollama_url.rstrip('/')}/api/generate",
+                json={"model": ollama_model, "prompt": prompt, "stream": False},
+                timeout=90,
+            )
+            if resp.status_code == 200:
+                raw_text = resp.json().get("response", "").strip()
+                # Remove thinking tags from qwen3/thinking models if present
+                clean = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
+                if clean:
+                    return clean
+        except Exception as exc:
+            print(f"Ollama ({ollama_model}) generation failed: {exc}")
+        return None
+
+    # Helper: try Gemini
+    def try_gemini() -> str | None:
+        if not model:
+            return None
+        try:
+            res = model.generate_content(prompt)
+            return res.text.strip()
+        except Exception as exc:
+            print(f"Gemini generation failed: {exc}")
+            return None
+
+    # 1. Execute according to configured provider
+    if ai_provider == "ollama":
+        text = try_ollama()
+        if text:
+            return text, confidence, f"Ollama ({ollama_model})"
+        text = try_gemini()
+        if text:
+            return text, confidence, "Gemini (Fallback)"
+
+    elif ai_provider == "gemini":
+        text = try_gemini()
+        if text:
+            return text, confidence, "Gemini"
+        text = try_ollama()
+        if text:
+            return text, confidence, f"Ollama ({ollama_model})"
+
+    else:  # "auto"
+        # Try Ollama first if explicitly reachable, otherwise Gemini
+        text = try_gemini() or try_ollama()
+        if text:
+            source = "Gemini" if model else f"Ollama ({ollama_model})"
+            return text, confidence, source
+
+    # 2. Template fallback if LLMs fail or not configured
+    fail_checks = [k for k, v in checks.items() if v.get("status") == "FAIL"]
+    review_checks = [k for k, v in checks.items() if v.get("status") == "REVIEW"]
+    pass_checks = [k for k, v in checks.items() if v.get("status") == "PASS"]
+
+    if recommendation == "QUALIFY":
+        tmpl = (
+            f"All mandatory compliance requirements for {company_name} are satisfied. "
+            f"Passed {len(pass_checks)} checks with a compliance score of {score}/100."
+        )
+    elif recommendation == "MANUAL_REVIEW":
+        issues = ", ".join(review_checks + fail_checks)
+        tmpl = (
+            f"{company_name} has passed most checks ({len(pass_checks)} passed) "
+            f"but requires review for: {issues}. Compliance score: {score}/100."
+        )
+    else:
+        issues = ", ".join(fail_checks)
+        tmpl = (
+            f"Disqualification recommended for {company_name}. "
+            f"Critical failures in: {issues}. Compliance score: {score}/100. "
+            f"Risk level: {risk}."
+        )
+    return tmpl, confidence, "Rule Engine"
 
 
-def run_verification(bidder_id: int, model=None) -> dict[str, Any]:
+def run_verification(
+    bidder_id: str | int,
+    model=None,
+    ai_provider: str = "auto",
+    ollama_url: str = "http://localhost:11434",
+    ollama_model: str = "qwen3:14b",
+) -> dict[str, Any]:
     """
     Main verification pipeline. Returns structured result dict.
     """
@@ -183,7 +235,13 @@ def run_verification(bidder_id: int, model=None) -> dict[str, Any]:
                     })
 
     # 6. Generate AI explanation (text only — not compliance decision)
-    ai_summary, confidence = _generate_ai_summary(company_name, score, risk, recommendation, checks, model)
+    ai_summary, confidence, ai_source = _generate_ai_summary(
+        company_name, score, risk, recommendation, checks,
+        model=model,
+        ai_provider=ai_provider,
+        ollama_url=ollama_url,
+        ollama_model=ollama_model,
+    )
 
     # 7. Build final result
     result = {
@@ -196,6 +254,7 @@ def run_verification(bidder_id: int, model=None) -> dict[str, Any]:
         "discrepancies": discrepancies,
         "evidence": [],
         "aiSummary": ai_summary,
+        "aiSource": ai_source,
         "confidence": confidence,
         "verifiedAt": verified_at,
         "verificationMode": "SIMULATED_GOV_DATABASE",
@@ -206,7 +265,8 @@ def run_verification(bidder_id: int, model=None) -> dict[str, Any]:
         save_verification_result(bidder_id, result)
         create_verification_log(bidder_id, f"Verification complete — {recommendation}", result)
     except StrapiClientError as exc:
-        print(f"Warning: Could not save result to Strapi: {exc}")
+        # A verification is not complete until its result and audit event are persisted.
+        raise StrapiClientError(f"Verification calculated but could not be saved: {exc}") from exc
 
     return result
 

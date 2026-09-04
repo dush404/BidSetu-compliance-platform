@@ -4,7 +4,7 @@ import asyncio
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import base64
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -18,12 +18,26 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     print("WARNING: GEMINI_API_KEY not found. Add it to /ai-worker/.env")
 
+# AI Configuration (Supports Gemini or Local Ollama e.g. qwen3:14b)
+AI_PROVIDER = os.getenv("AI_PROVIDER", "auto").lower()  # "gemini", "ollama", or "auto"
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:14b")
+
 # Initialize Gemini
+model = None
+ACTIVE_MODEL_NAME = "Not Configured"
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")  # Fixed model name
-else:
-    model = None
+    for model_candidate in ["gemini-3.6-flash", "gemini-flash-latest", "gemini-flash-lite-latest"]:
+        try:
+            model = genai.GenerativeModel(model_candidate)
+            ACTIVE_MODEL_NAME = model_candidate
+            print(f"INFO: Successfully initialized Gemini model: {model_candidate}")
+            break
+        except Exception as e:
+            print(f"WARNING: Could not initialize {model_candidate}: {e}")
+
+print(f"INFO: AI Provider: {AI_PROVIDER} | Ollama: {OLLAMA_URL} ({OLLAMA_MODEL}) | Gemini: {ACTIVE_MODEL_NAME}")
 
 app = FastAPI(title="AI Tender Compliance Worker", version="1.0.0")
 
@@ -45,6 +59,12 @@ class VerifyBidderRequest(BaseModel):
 
 class VerifyAllRequest(BaseModel):
     ids: List[int]
+
+
+class SwitchProviderRequest(BaseModel):
+    provider: str
+    ollama_model: Optional[str] = None
+    ollama_url: Optional[str] = None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -139,11 +159,35 @@ def quick_verify(extracted: dict) -> dict:
 
 @app.get("/health")
 def health():
+    if AI_PROVIDER == "ollama":
+        source_label = f"Ollama ({OLLAMA_MODEL})"
+    elif AI_PROVIDER == "gemini":
+        source_label = f"Gemini ({ACTIVE_MODEL_NAME})"
+    else:  # auto
+        source_label = f"Gemini ({ACTIVE_MODEL_NAME})" if model else f"Ollama ({OLLAMA_MODEL})"
+
     return {
         "status": "ok",
-        "ai_source": "Gemini 1.5 Flash" if model else "Not Configured (Missing API Key)",
+        "provider": AI_PROVIDER,
+        "ai_source": source_label,
+        "ollama_url": OLLAMA_URL,
+        "ollama_model": OLLAMA_MODEL,
         "version": "1.0.0",
     }
+
+
+@app.post("/switch-provider")
+def switch_provider(req: SwitchProviderRequest):
+    """Dynamically switch AI provider between 'gemini', 'ollama', and 'auto'."""
+    global AI_PROVIDER, OLLAMA_MODEL, OLLAMA_URL
+    p = req.provider.lower()
+    if p in ["gemini", "ollama", "auto"]:
+        AI_PROVIDER = p
+    if req.ollama_model:
+        OLLAMA_MODEL = req.ollama_model
+    if req.ollama_url:
+        OLLAMA_URL = req.ollama_url.rstrip("/")
+    return health()
 
 
 @app.post("/extract")
@@ -163,7 +207,7 @@ async def extract_file(file: UploadFile = File(...)):
             "filename": file.filename,
             "extracted_data": extracted_data,
             "verification_result": verification,
-            "source": "Gemini 1.5 Flash",
+            "source": f"Gemini ({ACTIVE_MODEL_NAME})" if model else f"Ollama ({OLLAMA_MODEL})",
         }
     finally:
         if os.path.exists(temp_path):
@@ -171,10 +215,16 @@ async def extract_file(file: UploadFile = File(...)):
 
 
 @app.post("/verify-bidder/{bidder_id}")
-async def verify_single_bidder(bidder_id: int):
+async def verify_single_bidder(bidder_id: str):
     """Run full compliance verification for a single bidder."""
     try:
-        result = run_verification(bidder_id, model=model)
+        result = run_verification(
+            bidder_id,
+            model=model,
+            ai_provider=AI_PROVIDER,
+            ollama_url=OLLAMA_URL,
+            ollama_model=OLLAMA_MODEL,
+        )
         return result
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

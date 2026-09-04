@@ -11,3 +11,4 @@ backend/data/
 backend/.tmp/
 .env
 .env.ai
+ai-worker/.env

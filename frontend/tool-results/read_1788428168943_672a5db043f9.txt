@@ -1,0 +1,600 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useState } from "react";
+     4→import { motion, AnimatePresence } from "framer-motion";
+     5→import {
+     6→  AlertTriangle,
+     7→  BadgeCheck,
+     8→  Building2,
+     9→  ChevronDown,
+    10→  CircleMinus,
+    11→  Clock3,
+    12→  Database,
+    13→  FileText,
+    14→  Fingerprint,
+    15→  Info,
+    16→  Landmark,
+    17→  Loader2,
+    18→  ShieldCheck,
+    19→  Sparkles,
+    20→  XCircle,
+    21→  CheckCircle2,
+    22→  FileDown,
+    23→} from "lucide-react";
+    24→import {
+    25→  AlertDialog,
+    26→  AlertDialogAction,
+    27→  AlertDialogCancel,
+    28→  AlertDialogContent,
+    29→  AlertDialogDescription,
+    30→  AlertDialogFooter,
+    31→  AlertDialogHeader,
+    32→  AlertDialogTitle,
+    33→  AlertDialogTrigger,
+    34→} from "@/components/ui/alert-dialog";
+    35→import { toast } from "sonner";
+    36→import { api } from "@/lib/api";
+    37→import { useAppStore } from "@/lib/store";
+    38→import type { BidderDetail, CheckStatus, OfficerDecision } from "@/lib/types";
+    39→import { decisionLabel, fmtDateTime, timeAgo } from "@/lib/format";
+    40→import { PageHeader } from "../page-header";
+    41→import { Reveal } from "../motion";
+    42→import { StatusPill } from "../status-pill";
+    43→import { ScoreRing } from "../score-ring";
+    44→import { BidderDetailSkeleton } from "../skeletons";
+    45→import { EmptyState } from "../empty-state";
+    46→import { VerifyOverlay, type VerifyRun } from "../verify-overlay";
+    47→import { cn } from "@/lib/utils";
+    48→
+    49→function CheckIcon({ status }: { status: CheckStatus }) {
+    50→  const cls = {
+    51→    PASS: "text-ok",
+    52→    REVIEW: "text-warn",
+    53→    FAIL: "text-bad",
+    54→    NA: "text-muted-foreground/50",
+    55→  }[status];
+    56→  const Icon = {
+    57→    PASS: CheckCircle2,
+    58→    REVIEW: AlertTriangle,
+    59→    FAIL: XCircle,
+    60→    NA: CircleMinus,
+    61→  }[status];
+    62→  return <Icon className={cn("size-4.5 shrink-0", cls)} strokeWidth={status === "NA" ? 1.5 : 2} />;
+    63→}
+    64→
+    65→const badge: Record<CheckStatus, { label: string; cls: string }> = {
+    66→  PASS: { label: "Pass", cls: "text-ok bg-ok-soft border-ok/25" },
+    67→  REVIEW: { label: "Review", cls: "text-warn bg-warn-soft border-warn/30" },
+    68→  FAIL: { label: "Fail", cls: "text-bad bg-bad-soft border-bad/25" },
+    69→  NA: { label: "N/A", cls: "text-muted-foreground bg-muted border-border" },
+    70→};
+    71→
+    72→export function BidderDetailView({ bidderId }: { bidderId: string }) {
+    73→  const navigate = useAppStore((s) => s.navigate);
+    74→  const [bidder, setBidder] = useState<BidderDetail | null>(null);
+    75→  const [error, setError] = useState(false);
+    76→  const [expanded, setExpanded] = useState<string | null>(null);
+    77→  const [run, setRun] = useState<VerifyRun | null>(null);
+    78→  const [deciding, setDeciding] = useState(false);
+    79→  const [note, setNote] = useState("");
+    80→
+    81→  const load = useCallback(async () => {
+    82→    setError(false);
+    83→    try {
+    84→      const r = await api.getBidder(bidderId);
+    85→      setBidder(r.bidder);
+    86→    } catch {
+    87→      setError(true);
+    88→    }
+    89→  }, [bidderId]);
+    90→
+    91→  useEffect(() => {
+    92→    void load();
+    93→  }, [load]);
+    94→
+    95→  if (error) {
+    96→    return (
+    97→      <EmptyState
+    98→        icon={AlertTriangle}
+    99→        title="Bidder unavailable"
+   100→        hint="We could not load this bidder's verification record."
+   101→        action={
+   102→          <button
+   103→            onClick={() => load()}
+   104→            className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-primary-foreground"
+   105→          >
+   106→            Try again
+   107→          </button>
+   108→        }
+   109→      />
+   110→    );
+   111→  }
+   112→
+   113→  if (!bidder) return <BidderDetailSkeleton />;
+   114→
+   115→  const pass = bidder.checks.filter((c) => c.status === "PASS").length;
+   116→  const fail = bidder.checks.filter((c) => c.status === "FAIL").length;
+   117→  const review = bidder.checks.filter((c) => c.status === "REVIEW").length;
+   118→  const notVerified = bidder.checks.length === 0;
+   119→
+   120→  const decide = async (decision: OfficerDecision) => {
+   121→    setDeciding(true);
+   122→    try {
+   123→      await api.decide(bidderId, decision, note || undefined);
+   124→      toast.success(`Decision recorded — ${decisionLabel[decision]}`, {
+   125→        description: "This action has been written to the audit trail.",
+   126→      });
+   127→      setNote("");
+   128→      await load();
+   129→    } catch {
+   130→      toast.error("Could not record decision. Try again.");
+   131→    } finally {
+   132→      setDeciding(false);
+   133→    }
+   134→  };
+   135→
+   136→  return (
+   137→    <div className="space-y-7">
+   138→      <PageHeader
+   139→        onBack={() => navigate("tender", { tenderId: bidder.tender.id, tenderLabel: bidder.tender.code })}
+   140→        backLabel="Back to tender"
+   141→        eyebrow={
+   142→          <>
+   143→            <span className="font-mono text-xs text-muted-foreground">{bidder.tender.code}</span>
+   144→            <StatusPill kind={bidder.status} />
+   145→            {bidder.dataSource && (
+   146→              <span className="inline-flex items-center gap-1 rounded-full border border-warn/25 bg-warn-soft/60 px-2.5 py-0.5 text-[11px] font-medium text-warn">
+   147→                <Database className="size-3" /> Simulated DB
+   148→              </span>
+   149→            )}
+   150→          </>
+   151→        }
+   152→        title={bidder.company}
+   153→        sub={
+   154→          <span className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+   155→            <span className="inline-flex items-center gap-1.5">
+   156→              <Fingerprint className="size-3.5" /> Contact: {bidder.contactName}
+   157→            </span>
+   158→            <span className="inline-flex items-center gap-1.5 font-mono text-xs">
+   159→              GSTIN {bidder.gstin}
+   160→            </span>
+   161→            <span className="inline-flex items-center gap-1.5 font-mono text-xs">
+   162→              PAN {bidder.pan}
+   163→            </span>
+   164→            {bidder.lastCheckedAt && (
+   165→              <span className="inline-flex items-center gap-1.5">
+   166→                <Clock3 className="size-3.5" /> Checked {timeAgo(bidder.lastCheckedAt)}
+   167→              </span>
+   168→            )}
+   169→          </span>
+   170→        }
+   171→      />
+   172→
+   173→      {notVerified ? (
+   174→        /* ——— Not yet verified ——— */
+   175→        <Reveal>
+   176→          <div className="card-hairline flex flex-col items-center gap-5 px-6 py-16 text-center">
+   177→            <div className="animate-floaty flex size-20 items-center justify-center rounded-full border border-dashed border-primary/30 bg-accent/40">
+   178→              <ShieldCheck className="size-8 text-primary" strokeWidth={1.5} />
+   179→            </div>
+   180→            <div>
+   181→              <h2 className="font-display text-2xl">Awaiting verification</h2>
+   182→              <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
+   183→                {bidder.company} has not been checked against the government
+   184→                registries yet. Run the verification to generate a compliance
+   185→                score and AI summary.
+   186→              </p>
+   187→            </div>
+   188→            <button
+   189→              onClick={() => setRun({ bidderId: bidder.id, company: bidder.company })}
+   190→              className="group flex min-h-12 items-center gap-2.5 rounded-full bg-foreground px-7 text-sm font-medium text-primary-foreground transition-all hover:shadow-[0_10px_28px_-8px_oklch(0.245_0.014_105/0.45)]"
+   191→            >
+   192→              <ShieldCheck className="size-4 transition-transform duration-300 group-hover:scale-110" />
+   193→              Run verification
+   194→            </button>
+   195→          </div>
+   196→        </Reveal>
+   197→      ) : (
+   198→        <>
+   199→          {/* ——— Score + summary ——— */}
+   200→          <div className="grid gap-4 lg:grid-cols-3">
+   201→            <Reveal className="card-hairline flex flex-col items-center justify-center p-6">
+   202→              <ScoreRing score={bidder.score ?? 0} />
+   203→              <p className="mt-3 text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+   204→                Compliance score
+   205→              </p>
+   206→            </Reveal>
+   207→
+   208→            <Reveal delay={0.07} className="card-hairline flex flex-col justify-center gap-5 p-6 lg:col-span-2">
+   209→              <div className="flex flex-wrap items-center gap-2.5">
+   210→                {bidder.risk && <StatusPill kind={bidder.risk} className="scale-105" />}
+   211→                {bidder.recommendation && (
+   212→                  <StatusPill kind={bidder.recommendation} className="scale-105" />
+   213→                )}
+   214→                <span className="ml-auto text-right text-[11px] text-muted-foreground">
+   215→                  Last checked
+   216→                  <span className="block font-medium text-foreground">
+   217→                    {fmtDateTime(bidder.lastCheckedAt)}
+   218→                  </span>
+   219→                </span>
+   220→              </div>
+   221→
+   222→              <div className="grid grid-cols-3 gap-3">
+   223→                {[
+   224→                  { n: pass, label: "Pass", Icon: CheckCircle2, cls: "text-ok" },
+   225→                  { n: fail, label: "Fail", Icon: XCircle, cls: "text-bad" },
+   226→                  { n: review, label: "Review", Icon: AlertTriangle, cls: "text-warn" },
+   227→                ].map(({ n, label, Icon, cls }) => (
+   228→                  <div
+   229→                    key={label}
+   230→                    className="flex items-center gap-2.5 rounded-xl border border-border bg-muted/40 px-3.5 py-3"
+   231→                  >
+   232→                    <Icon className={cn("size-4.5", cls)} />
+   233→                    <span>
+   234→                      <span className={cn("block text-lg font-semibold tabular-nums", cls)}>{n}</span>
+   235→                      <span className="block text-[11px] text-muted-foreground">{label}</span>
+   236→                    </span>
+   237→                  </div>
+   238→                ))}
+   239→              </div>
+   240→
+   241→              {bidder.aiSummary && (
+   242→                <p className="border-l-2 border-primary/30 pl-4 text-[13px] leading-relaxed text-muted-foreground">
+   243→                  {bidder.aiSummary}
+   244→                </p>
+   245→              )}
+   246→            </Reveal>
+   247→          </div>
+   248→
+   249→          {/* ——— Main grid ——— */}
+   250→          <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+   251→            <div className="space-y-6">
+   252→              {/* checklist */}
+   253→              <section aria-label="Compliance checklist">
+   254→                <Reveal className="mb-3 flex items-center gap-2">
+   255→                  <ShieldCheck className="size-4 text-primary" />
+   256→                  <h2 className="font-display text-2xl">Compliance checklist</h2>
+   257→                </Reveal>
+   258→                <Reveal delay={0.05} className="card-hairline divide-y divide-border overflow-hidden">
+   259→                  {bidder.checks.map((c) => {
+   260→                    const open = expanded === c.id;
+   261→                    return (
+   262→                      <div key={c.id}>
+   263→                        <button
+   264→                          onClick={() => setExpanded(open ? null : c.id)}
+   265→                          aria-expanded={open}
+   266→                          className="flex w-full items-center gap-3.5 px-5 py-4 text-left transition-colors hover:bg-muted/40"
+   267→                        >
+   268→                          <CheckIcon status={c.status} />
+   269→                          <span className="min-w-0 flex-1">
+   270→                            <span className="flex flex-wrap items-center gap-2">
+   271→                              <span className="text-sm font-medium">{c.name}</span>
+   272→                              <span
+   273→                                className={cn(
+   274→                                  "rounded-full border px-2 py-px text-[10px] font-semibold tracking-wide uppercase",
+   275→                                  badge[c.status].cls
+   276→                                )}
+   277→                              >
+   278→                                {badge[c.status].label}
+   279→                              </span>
+   280→                            </span>
+   281→                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+   282→                              {c.detail}
+   283→                            </span>
+   284→                          </span>
+   285→                          <span className="hidden text-right text-[11px] text-muted-foreground md:block">
+   286→                            {c.source}
+   287→                          </span>
+   288→                          <motion.span
+   289→                            animate={{ rotate: open ? 180 : 0 }}
+   290→                            transition={{ duration: 0.25 }}
+   291→                            className="text-muted-foreground"
+   292→                          >
+   293→                            <ChevronDown className="size-4" />
+   294→                          </motion.span>
+   295→                        </button>
+   296→                        <AnimatePresence initial={false}>
+   297→                          {open && (
+   298→                            <motion.div
+   299→                              initial={{ height: 0, opacity: 0 }}
+   300→                              animate={{ height: "auto", opacity: 1 }}
+   301→                              exit={{ height: 0, opacity: 0 }}
+   302→                              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+   303→                              className="overflow-hidden"
+   304→                            >
+   305→                              <div
+   306→                                className={cn(
+   307→                                  "mx-5 mb-4 rounded-lg border p-4 text-[13px] leading-relaxed",
+   308→                                  c.status === "FAIL"
+   309→                                    ? "border-bad/20 bg-bad-soft/50 text-bad"
+   310→                                    : c.status === "REVIEW"
+   311→                                      ? "border-warn/25 bg-warn-soft/50 text-warn"
+   312→                                      : "border-ok/20 bg-ok-soft/40 text-foreground"
+   313→                                )}
+   314→                              >
+   315→                                {c.verifiedValue && (
+   316→                                  <p className="mb-1.5">
+   317→                                    <span className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+   318→                                      Verified (database)
+   319→                                    </span>
+   320→                                    <span className="mt-0.5 block font-mono text-xs">
+   321→                                      {c.verifiedValue}
+   322→                                    </span>
+   323→                                  </p>
+   324→                                )}
+   325→                                <p>
+   326→                                  <span className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+   327→                                    Finding
+   328→                                  </span>
+   329→                                  <span className="mt-0.5 block">{c.finding}</span>
+   330→                                </p>
+   331→                                <p className="mt-2.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+   332→                                  <Database className="size-3" /> {c.source}
+   333→                                </p>
+   334→                              </div>
+   335→                            </motion.div>
+   336→                          )}
+   337→                        </AnimatePresence>
+   338→                      </div>
+   339→                    );
+   340→                  })}
+   341→                </Reveal>
+   342→              </section>
+   343→
+   344→              {/* documents */}
+   345→              <section aria-label="Uploaded documents">
+   346→                <Reveal className="mb-3 flex items-center gap-2">
+   347→                  <FileText className="size-4 text-primary" />
+   348→                  <h2 className="font-display text-2xl">Uploaded documents</h2>
+   349→                </Reveal>
+   350→                {bidder.documents.length === 0 ? (
+   351→                  <Reveal delay={0.05}>
+   352→                    <div className="card-hairline flex items-center gap-4 p-6 text-muted-foreground">
+   353→                      <div className="flex size-11 items-center justify-center rounded-full border border-dashed border-border">
+   354→                        <FileDown className="size-4.5" />
+   355→                      </div>
+   356→                      <div>
+   357→                        <p className="text-sm font-medium text-foreground">No documents uploaded</p>
+   358→                        <p className="text-xs">The bidder has not attached supporting files.</p>
+   359→                      </div>
+   360→                    </div>
+   361→                  </Reveal>
+   362→                ) : (
+   363→                  <Reveal delay={0.05} className="card-hairline divide-y divide-border overflow-hidden">
+   364→                    {bidder.documents.map((d) => (
+   365→                      <div key={d.id} className="group flex items-center gap-4 px-5 py-3.5">
+   366→                        <span className="flex size-10 items-center justify-center rounded-lg border border-border bg-muted/50 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+   367→                          {d.type}
+   368→                        </span>
+   369→                        <span className="min-w-0 flex-1">
+   370→                          <span className="block truncate text-sm font-medium">{d.name}</span>
+   371→                          <span className="block text-[11px] text-muted-foreground">
+   372→                            {d.size} · uploaded {fmtDateTime(d.uploadedAt).split(",")[0]}
+   373→                          </span>
+   374→                        </span>
+   375→                        <button
+   376→                          onClick={() =>
+   377→                            toast.info("Demo environment", {
+   378→                              description: `“${d.name}” is a simulated document.`,
+   379→                            })
+   380→                          }
+   381→                          className="flex min-h-9 items-center rounded-full border border-border px-3.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+   382→                        >
+   383→                          Preview
+   384→                        </button>
+   385→                      </div>
+   386→                    ))}
+   387→                  </Reveal>
+   388→                )}
+   389→              </section>
+   390→            </div>
+   391→
+   392→            {/* ——— Right rail ——— */}
+   393→            <div className="space-y-5">
+   394→              {/* AI summary */}
+   395→              <Reveal className="card-hairline overflow-hidden">
+   396→                <div className="flex items-center gap-2 border-b border-border bg-accent/40 px-5 py-3.5">
+   397→                  <Sparkles className="size-4 text-primary" />
+   398→                  <h3 className="text-sm font-semibold tracking-tight">AI verification summary</h3>
+   399→                </div>
+   400→                <div className="space-y-3.5 px-5 py-4">
+   401→                  <p className="text-[13px] leading-relaxed text-muted-foreground">
+   402→                    {bidder.aiSummary ?? "No AI summary available."}
+   403→                  </p>
+   404→                  <dl className="space-y-2 text-[13px]">
+   405→                    {bidder.recommendation && (
+   406→                      <div className="flex items-center justify-between">
+   407→                        <dt className="text-muted-foreground">Recommendation</dt>
+   408→                        <dd><StatusPill kind={bidder.recommendation} size="xs" /></dd>
+   409→                      </div>
+   410→                    )}
+   411→                    {bidder.confidence !== null && (
+   412→                      <div className="flex items-center justify-between">
+   413→                        <dt className="text-muted-foreground">Confidence</dt>
+   414→                        <dd className="font-semibold tabular-nums">{bidder.confidence}%</dd>
+   415→                      </div>
+   416→                    )}
+   417→                    <div className="flex items-center justify-between">
+   418→                      <dt className="text-muted-foreground">Data source</dt>
+   419→                      <dd className="font-medium">Simulated Gov. DB</dd>
+   420→                    </div>
+   421→                  </dl>
+   422→                  <p className="flex gap-2 rounded-lg bg-muted/70 p-3 text-[11px] leading-relaxed text-muted-foreground">
+   423→                    <Info className="mt-0.5 size-3.5 shrink-0" />
+   424→                    AI is a decision-support tool only. The final qualification
+   425→                    decision rests with the Procurement Officer.
+   426→                  </p>
+   427→                </div>
+   428→              </Reveal>
+   429→
+   430→              {/* why this result */}
+   431→              <Reveal delay={0.06} className="card-hairline p-5">
+   432→                <h3 className="mb-3 text-sm font-semibold tracking-tight">Why this result?</h3>
+   433→                <ul className="space-y-2">
+   434→                  {bidder.checks
+   435→                    .filter((c) => c.status !== "NA")
+   436→                    .map((c) => (
+   437→                      <li key={c.id} className="flex items-start gap-2.5 text-[13px]">
+   438→                        <CheckIcon status={c.status} />
+   439→                        <span className="text-muted-foreground">
+   440→                          <span className="font-medium text-foreground">{c.name}</span> —{" "}
+   441→                          {c.status === "PASS"
+   442→                            ? "verified and active"
+   443→                            : c.status === "FAIL"
+   444→                              ? c.detail.toLowerCase()
+   445→                              : c.detail.toLowerCase()}
+   446→                        </span>
+   447→                      </li>
+   448→                    ))}
+   449→                </ul>
+   450→              </Reveal>
+   451→
+   452→              {/* officer decision */}
+   453→              <Reveal delay={0.12} className="card-hairline overflow-hidden">
+   454→                <div className="border-b border-border px-5 py-3.5">
+   455→                  <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+   456→                    <Landmark className="size-4 text-primary" />
+   457→                    Officer decision
+   458→                  </h3>
+   459→                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+   460→                    Your decision is final and will be logged
+   461→                  </p>
+   462→                </div>
+   463→                <div className="space-y-2.5 p-5">
+   464→                  {(
+   465→                    [
+   466→                      {
+   467→                        d: "QUALIFY" as OfficerDecision,
+   468→                        label: "Qualify bidder",
+   469→                        icon: CheckCircle2,
+   470→                        cls: "bg-ok text-white hover:brightness-105 shadow-[0_6px_18px_-8px_color-mix(in_oklch,var(--ok)_70%,transparent)]",
+   471→                        dialogCls: "bg-ok text-white",
+   472→                      },
+   473→                      {
+   474→                        d: "CLARIFY" as OfficerDecision,
+   475→                        label: "Request clarification",
+   476→                        icon: AlertTriangle,
+   477→                        cls: "border border-warn/40 bg-warn-soft text-warn hover:bg-warn-soft/70",
+   478→                        dialogCls: "bg-warn text-white",
+   479→                      },
+   480→                      {
+   481→                        d: "DISQUALIFY" as OfficerDecision,
+   482→                        label: "Disqualify bidder",
+   483→                        icon: XCircle,
+   484→                        cls: "border border-bad/30 bg-bad-soft text-bad hover:bg-bad-soft/70",
+   485→                        dialogCls: "bg-bad text-white",
+   486→                      },
+   487→                    ]
+   488→                  ).map(({ d, label, icon: Icon, cls }) => (
+   489→                    <AlertDialog key={d}>
+   490→                      <AlertDialogTrigger asChild>
+   491→                        <button
+   492→                          disabled={deciding}
+   493→                          className={cn(
+   494→                            "flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-60",
+   495→                            cls
+   496→                          )}
+   497→                        >
+   498→                          {deciding ? (
+   499→                            <Loader2 className="size-4 animate-spin" />
+   500→                          ) : (
+   501→                            <Icon className="size-4" />
+   502→                          )}
+   503→                          {label}
+   504→                        </button>
+   505→                      </AlertDialogTrigger>
+   506→                      <AlertDialogContent className="max-w-md">
+   507→                        <AlertDialogHeader>
+   508→                          <AlertDialogTitle className="font-display text-2xl">
+   509→                            Confirm — {decisionLabel[d].toLowerCase()}?
+   510→                          </AlertDialogTitle>
+   511→                          <AlertDialogDescription className="text-[13px] leading-relaxed">
+   512→                            You are about to mark{" "}
+   513→                            <span className="font-semibold text-foreground">{bidder.company}</span>{" "}
+   514→                            as <span className="font-semibold text-foreground">{decisionLabel[d]}</span>{" "}
+   515→                            for {bidder.tender.code}. This will be recorded in the audit trail
+   516→                            with your name and a timestamp.
+   517→                          </AlertDialogDescription>
+   518→                        </AlertDialogHeader>
+   519→                        <textarea
+   520→                          value={note}
+   521→                          onChange={(e) => setNote(e.target.value)}
+   522→                          placeholder="Optional note for the record…"
+   523→                          rows={3}
+   524→                          className="w-full resize-none rounded-xl border border-input bg-background p-3.5 text-sm outline-none transition-all placeholder:text-muted-foreground/60 focus:border-primary/50 focus:shadow-[0_0_0_4px_color-mix(in_oklch,var(--primary)_9%,transparent)]"
+   525→                        />
+   526→                        <AlertDialogFooter>
+   527→                          <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+   528→                          <AlertDialogAction
+   529→                            onClick={() => void decide(d)}
+   530→                            disabled={deciding}
+   531→                            className={cn("rounded-full", d === "QUALIFY" ? "bg-ok text-white" : d === "DISQUALIFY" ? "bg-bad text-white" : "bg-warn text-white")}
+   532→                          >
+   533→                            {deciding ? (
+   534→                              <Loader2 className="size-4 animate-spin" />
+   535→                            ) : (
+   536→                              <BadgeCheck className="size-4" />
+   537→                            )}
+   538→                            Confirm decision
+   539→                          </AlertDialogAction>
+   540→                        </AlertDialogFooter>
+   541→                      </AlertDialogContent>
+   542→                    </AlertDialog>
+   543→                  ))}
+   544→                  <p className="pt-1 text-center text-[11px] text-muted-foreground">
+   545→                    AI suggests:{" "}
+   546→                    <span className="font-semibold text-foreground">
+   547→                      {bidder.recommendation ? decisionLabel[bidder.recommendation] : "Run verification first"}
+   548→                    </span>
+   549→                  </p>
+   550→                </div>
+   551→              </Reveal>
+   552→            </div>
+   553→          </div>
+   554→        </>
+   555→      )}
+   556→
+   557→      {/* tender context */}
+   558→      <Reveal>
+   559→        <button
+   560→          onClick={() =>
+   561→            navigate("tender", { tenderId: bidder.tender.id, tenderLabel: bidder.tender.code })
+   562→          }
+   563→          className="group flex w-full items-center gap-3 rounded-xl border border-dashed border-border p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
+   564→        >
+   565→          <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+   566→            <Building2 className="size-4" />
+   567→          </span>
+   568→          <span className="min-w-0 flex-1 text-sm">
+   569→            Part of{" "}
+   570→            <span className="font-medium">{bidder.tender.title}</span>
+   571→            <span className="block text-xs text-muted-foreground">
+   572→              {bidder.tender.department}
+   573→            </span>
+   574→          </span>
+   575→          <span className="text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
+   576→            Open tender →
+   577→          </span>
+   578→        </button>
+   579→      </Reveal>
+   580→
+   581→      {/* single verify overlay */}
+   582→      <AnimatePresence>
+   583→        {run && (
+   584→          <VerifyOverlay
+   585→            key={run.bidderId}
+   586→            runs={[run]}
+   587→            onAllDone={() => {
+   588→              setRun(null);
+   589→              void load();
+   590→              toast.success("Verification complete", {
+   591→                description: "Compliance results and audit trail updated.",
+   592→              });
+   593→            }}
+   594→          />
+   595→        )}
+   596→      </AnimatePresence>
+   597→    </div>
+   598→  );
+   599→}
+   600→

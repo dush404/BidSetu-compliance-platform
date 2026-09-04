@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Tender {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  title       String
+  department  String
+  category    String
+  status      String   @default("OPEN") // OPEN | CLOSED
+  publishedAt DateTime
+  closesAt    DateTime
+  value       String
+  bidders     Bidder[]
+  createdAt   DateTime @default(now())
+}
+
+model Bidder {
+  id             String    @id @default(cuid())
+  tenderId       String
+  tender         Tender    @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  contactName    String
+  company        String
+  gstin          String
+  pan            String
+  // Submission IDs consumed by the Python AI worker (strapi_client contract)
+  udyamId        String?
+  epfoCode       String?
+  esicCode       String?
+  dpiitNumber    String?
+  nsicNumber     String?
+  status         String    @default("PENDING") // PENDING|PROCESSING|VERIFIED|MANUAL_REVIEW|REJECTED
+  score          Int?
+  risk           String? // LOW|MEDIUM|HIGH|CRITICAL
+  recommendation String? // QUALIFY|CLARIFY|DISQUALIFY
+  aiSummary      String?
+  confidence     Int?
+  lastCheckedAt  DateTime?
+  dataSource     String?
+  failedChecks   Int       @default(0)
+  verificationResult Json? // raw JSON result persisted by the AI worker via the Strapi adapter
+  checks         ComplianceCheck[]
+  documents      BidderDocument[]
+  auditEntries   AuditEntry[]
+  createdAt      DateTime  @default(now())
+}
+
+model ComplianceCheck {
+  id            String  @id @default(cuid())
+  bidderId      String
+  bidder        Bidder  @relation(fields: [bidderId], references: [id], onDelete: Cascade)
+  name          String
+  status        String // PASS|FAIL|REVIEW|NA
+  detail        String
+  finding       String
+  source        String
+  verifiedValue String?
+}
+
+model BidderDocument {
+  id         String   @id @default(cuid())
+  bidderId   String
+  bidder     Bidder   @relation(fields: [bidderId], references: [id], onDelete: Cascade)
+  name       String
+  type       String
+  size       String
+  uploadedAt DateTime
+}
+
+// Simulated government registries consumed by the AI worker through the
+// Strapi-compatible adapter routes (gst-databases, pan-databases, ...).
+// `collection` mirrors the Strapi collection slug; filterKey/filterValue hold
+// the indexed field so the adapter can serve strapi_client equality filters.
+model GovRecord {
+  id          String   @id @default(cuid())
+  collection  String
+  filterKey   String
+  filterValue String
+  data        Json
+  createdAt   DateTime @default(now())
+
+  @@unique([collection, filterKey, filterValue])
+  @@index([collection, filterValue])
+}
+
+model AuditEntry {
+  id         String   @id @default(cuid())
+  action     String   // VERIFICATION_COMPLETE|OFFICER_DECISION|BATCH_VERIFICATION|SESSION
+  message    String
+  bidderName String?
+  bidderId   String?
+  tenderCode String?
+  decision   String?
+  score      Int?
+  model      String?
+  officer    String?
+  createdAt  DateTime @default(now())
+  bidder     Bidder?  @relation(fields: [bidderId], references: [id], onDelete: SetNull)
+}

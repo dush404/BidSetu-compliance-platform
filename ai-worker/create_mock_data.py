@@ -24,7 +24,7 @@ def load_env_file() -> None:
     if not env_file.exists():
         return
 
-    for line in env_file.read_text(encoding="utf-8").splitlines():
+    for line in env_file.rvead_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -362,7 +362,7 @@ def seed_bidders(tender_ids: list[int]) -> None:
         print("  ✗ No tender IDs — skipping bidders")
         return
 
-    t1, t2, t3 = (tender_ids + [tender_ids[0]] * 3)[:3]  # Ensure 3 tender refs
+    t1, t2, t3, t4, t5 = (tender_ids + [tender_ids[0]] * 5)[:5]
 
     bidders = [
         # ── TENDER 1 — IT Hardware ──────────────────────────────────────────
@@ -499,6 +499,61 @@ def seed_bidders(tender_ids: list[int]) -> None:
             "bidderName": "Geeta Iyer", "companyName": "Coastline Engineering",
             "tender": t3, "gstin": "27BBBB2222B1Z2", "panNumber": "BBBBB2222B",
             "udyamId": "UDYAM-MH-01-2024000007",
+            "verificationStatus": "Pending", "complianceScore": None,
+        },
+
+        # ── TENDER 4 — Solar Power Plant Installation ───────────────────────
+        {
+            "bidderName": "Arjun Mehta", "companyName": "SolarGrid Energy Pvt Ltd",
+            "tender": t4, "gstin": "27AABCU9603R1Z5", "panNumber": "AABCU9603R",
+            "udyamId": "UDYAM-MH-01-2024000001", "epfoCode": "MHBAN0012345",
+            "esicCode": "ESIC-MH-000001", "verificationStatus": "Pending", "complianceScore": None,
+        },
+        {
+            "bidderName": "Neha Kapoor", "companyName": "SunPeak Renewables",
+            "tender": t4, "gstin": "27BBCDU1234R1Z6", "panNumber": "BBCDU1234D",
+            "verificationStatus": "Pending", "complianceScore": None,
+        },
+        {
+            "bidderName": "Vikram Rao", "companyName": "GreenVolt Systems",
+            "tender": t4, "gstin": "27QQQQ1234Q1Z9", "panNumber": "QQQPQ1234Q",
+            "udyamId": "UDYAM-MH-01-2024000006",
+            "verificationStatus": "Pending", "complianceScore": None,
+        },
+        {
+            "bidderName": "Ishita Sen", "companyName": "BrightRay Infrastructure",
+            "tender": t4, "gstin": "27XYZAB1234C1Z7", "panNumber": "XYZAB1234X",
+            "udyamId": "UDYAM-MH-01-2022000003",
+            "verificationStatus": "Pending", "complianceScore": None,
+        },
+        {
+            "bidderName": "Rohit Desai", "companyName": "Apex Solar Works",
+            "tender": t4, "gstin": "27AAACV1234D1Z8", "panNumber": "AAACV1234A",
+            "epfoCode": "MHBAN0045678", "esicCode": "ESIC-MH-000004",
+            "verificationStatus": "Pending", "complianceScore": None,
+        },
+        {
+            "bidderName": "Meera Joshi", "companyName": "EcoRoof Power",
+            "tender": t4, "gstin": "27PPPP9876P1Z4", "panNumber": "PPPPP9876P",
+            "epfoCode": "MHBAN0067890", "esicCode": "ESIC-MH-000006",
+            "verificationStatus": "Pending", "complianceScore": None,
+        },
+        {
+            "bidderName": "Karan Malhotra", "companyName": "National Solar Services",
+            "tender": t4, "gstin": "27AAAA1111A1Z1", "panNumber": "AAAAA1111A",
+            "udyamId": "UDYAM-MH-01-2024000004",
+            "verificationStatus": "Pending", "complianceScore": None,
+        },
+        {
+            "bidderName": "Pooja Nair", "companyName": "CleanEnergy Contractors",
+            "tender": t4, "gstin": "27BBBB2222B1Z2", "panNumber": "BBBBB2222B",
+            "udyamId": "UDYAM-MH-01-2024000007", "nsicNumber": "NSIC-2024-003",
+            "verificationStatus": "Pending", "complianceScore": None,
+        },
+        {
+            "bidderName": "Aditya Shah", "companyName": "Helio Infrastructure Ltd",
+            "tender": t4, "gstin": "27MMMM5678M1Z3", "panNumber": "MMMMP5678M",
+            "udyamId": "UDYAM-MH-01-2024000005",
             "verificationStatus": "Pending", "complianceScore": None,
         },
     ]

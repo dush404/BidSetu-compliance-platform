@@ -1,0 +1,616 @@
+     1→"""
+     2→Comprehensive mock data seed script.
+     3→Creates 5+ tenders, 20+ bidders, and all supporting database records
+     4→covering all 8 required compliance scenarios.
+     5→
+     6→Usage:
+     7→  Set STRAPI_API_TOKEN env var, then:
+     8→  python create_mock_data.py
+     9→
+    10→  Or set STRAPI_URL if Strapi is not on localhost:1337
+    11→"""
+    12→
+    13→import os
+    14→import sys
+    15→from pathlib import Path
+    16→from typing import Any
+    17→
+    18→import requests
+    19→
+    20→
+    21→def load_env_file() -> None:
+    22→    """Load environment variables from the local .env file if present."""
+    23→    env_file = Path(__file__).resolve().with_name(".env")
+    24→    if not env_file.exists():
+    25→        return
+    26→
+    27→    for line in env_file.read_text(encoding="utf-8").splitlines():
+    28→        line = line.strip()
+    29→        if not line or line.startswith("#") or "=" not in line:
+    30→            continue
+    31→
+    32→        key, value = line.split("=", 1)
+    33→        key = key.strip()
+    34→        value = value.strip().strip('"').strip("'")
+    35→        os.environ.setdefault(key, value)
+    36→
+    37→
+    38→load_env_file()
+    39→
+    40→STRAPI_URL = os.getenv("STRAPI_URL", "http://localhost:1337/api").rstrip("/")
+    41→API_TOKEN = os.getenv("STRAPI_API_TOKEN", os.getenv("STRAPI_API_KEY", ""))
+    42→
+    43→HEADERS = {
+    44→    "Authorization": f"Bearer {API_TOKEN}",
+    45→    "Content-Type": "application/json",
+    46→}
+    47→
+    48→
+    49→def post(endpoint: str, data: dict[str, Any]) -> dict[str, Any] | None:
+    50→    resp = requests.post(f"{STRAPI_URL}/{endpoint}", json={"data": data}, headers=HEADERS, timeout=20)
+    51→    if resp.status_code >= 400:
+    52→        print(f"ERROR posting to {endpoint}: {resp.status_code} — {resp.text[:200]}")
+    53→        return None
+    54→    created = resp.json().get("data", {})
+    55→    name = (data.get("title") or data.get("gstin") or data.get("udyamNumber") or
+    56→            data.get("entityName") or data.get("bidderName") or data.get("establishmentCode") or
+    57→            data.get("dpiitNumber") or data.get("nsicNumber") or data.get("esicCode") or
+    58→            data.get("panNumber") or "record")
+    59→    print(f"  ✓ {endpoint}: id={created.get('id')} — {name}")
+    60→    return created
+    61→
+    62→
+    63→def create_all(endpoint: str, records: list[dict]) -> list[int]:
+    64→    """Create multiple records and return their IDs."""
+    65→    ids = []
+    66→    for rec in records:
+    67→        created = post(endpoint, rec)
+    68→        if created:
+    69→            ids.append(created.get("id"))
+    70→    return ids
+    71→
+    72→
+    73→# ═══════════════════════════════════════════════════════════════════════════════
+    74→# GST DATABASE — 10 records
+    75→# ═══════════════════════════════════════════════════════════════════════════════
+    76→GST_DATA = [
+    77→    # Scenario A — Perfect: Active, recent filing
+    78→    {"gstin": "27AABCU9603R1Z5", "legalName": "TechServe Solutions Pvt Ltd",
+    79→     "tradeName": "TechServe Solutions", "statusId": "Active",
+    80→     "lastReturnFiled": "2024-06-30", "textComplianceRating": 95},
+    81→
+    82→    # Scenario B — GST Cancelled (mismatch)
+    83→    {"gstin": "27BBCDU1234R1Z6", "legalName": "Infra Build Corp",
+    84→     "tradeName": "Infra Build", "statusId": "Cancelled",
+    85→     "lastReturnFiled": "2022-01-01", "textComplianceRating": 10},
+    86→
+    87→    # Scenario C — Blacklisted bidder (GST is Active, but blacklist will catch them)
+    88→    {"gstin": "27QQQQ1234Q1Z9", "legalName": "Risky Traders Pvt Ltd",
+    89→     "tradeName": "Risky Traders", "statusId": "Active",
+    90→     "lastReturnFiled": "2024-05-31", "textComplianceRating": 40},
+    91→
+    92→    # Scenario D — Udyam Expired (GST OK)
+    93→    {"gstin": "27XYZAB1234C1Z7", "legalName": "GreenField Supplies",
+    94→     "tradeName": "GreenField", "statusId": "Active",
+    95→     "lastReturnFiled": "2024-07-31", "textComplianceRating": 80},
+    96→
+    97→    # Scenario E — PAN Name Mismatch (GST Active but wrong name in PAN)
+    98→    {"gstin": "27AAACV1234D1Z8", "legalName": "Apex Systems Ltd",
+    99→     "tradeName": "Apex Systems", "statusId": "Active",
+   100→     "lastReturnFiled": "2024-06-30", "textComplianceRating": 85},
+   101→
+   102→    # Scenario F — Multiple discrepancies (GST Suspended)
+   103→    {"gstin": "27ZZZZ4321Z1Z2", "legalName": "Dubious Contractors",
+   104→     "tradeName": "Dubious Contractors", "statusId": "Suspended",
+   105→     "lastReturnFiled": "2021-03-31", "textComplianceRating": 5},
+   106→
+   107→    # Scenario G — Late GST filer (GST Active but old filing)
+   108→    {"gstin": "27MMMM5678M1Z3", "legalName": "SlowPay Enterprises",
+   109→     "tradeName": "SlowPay", "statusId": "Active",
+   110→     "lastReturnFiled": "2023-01-31", "textComplianceRating": 50},
+   111→
+   112→    # Scenario H — Clean non-MSME (no Udyam, but not required)
+   113→    {"gstin": "27PPPP9876P1Z4", "legalName": "National Infrastructure Ltd",
+   114→     "tradeName": "NatInfra", "statusId": "Active",
+   115→     "lastReturnFiled": "2024-07-31", "textComplianceRating": 92},
+   116→
+   117→    # Extra bidders for tender volume
+   118→    {"gstin": "27AAAA1111A1Z1", "legalName": "Sunrise Tech Pvt Ltd",
+   119→     "tradeName": "Sunrise Tech", "statusId": "Active",
+   120→     "lastReturnFiled": "2024-05-31", "textComplianceRating": 88},
+   121→
+   122→    {"gstin": "27BBBB2222B1Z2", "legalName": "Coastline Engineering",
+   123→     "tradeName": "Coastline Engg", "statusId": "Active",
+   124→     "lastReturnFiled": "2024-04-30", "textComplianceRating": 78},
+   125→]
+   126→
+   127→# ═══════════════════════════════════════════════════════════════════════════════
+   128→# PAN DATABASE — 10 records
+   129→# ═══════════════════════════════════════════════════════════════════════════════
+   130→PAN_DATA = [
+   131→    {"panNumber": "AABCU9603R", "holderName": "TechServe Solutions Pvt Ltd",
+   132→     "statusId": "Valid", "lastItrFiled": "2024-07-31"},
+   133→
+   134→    {"panNumber": "BBCDU1234D", "holderName": "Infra Build Corp",
+   135→     "statusId": "Valid", "lastItrFiled": "2022-06-30"},
+   136→
+   137→    {"panNumber": "QQQPQ1234Q", "holderName": "Risky Traders Pvt Ltd",
+   138→     "statusId": "Blacklisted", "lastItrFiled": "2023-07-31"},
+   139→
+   140→    # Scenario D — Udyam expired, PAN valid
+   141→    {"panNumber": "XYZAB1234X", "holderName": "GreenField Supplies",
+   142→     "statusId": "Valid", "lastItrFiled": "2024-07-31"},
+   143→
+   144→    # Scenario E — PAN Name mismatch (PAN holder name is different from company)
+   145→    {"panNumber": "AAACV1234A", "holderName": "WRONGNAME Pvt Ltd",
+   146→     "statusId": "Valid", "lastItrFiled": "2024-06-30"},
+   147→
+   148→    # Scenario F — Multiple discrepancies
+   149→    {"panNumber": "ZZZZZ4321Z", "holderName": "Dubious Contractors",
+   150→     "statusId": "Invalid", "lastItrFiled": "2021-07-31"},
+   151→
+   152→    {"panNumber": "MMMMP5678M", "holderName": "SlowPay Enterprises",
+   153→     "statusId": "Valid", "lastItrFiled": "2023-07-31"},
+   154→
+   155→    {"panNumber": "PPPPP9876P", "holderName": "National Infrastructure Ltd",
+   156→     "statusId": "Valid", "lastItrFiled": "2024-07-31"},
+   157→
+   158→    {"panNumber": "AAAAA1111A", "holderName": "Sunrise Tech Pvt Ltd",
+   159→     "statusId": "Valid", "lastItrFiled": "2024-06-30"},
+   160→
+   161→    {"panNumber": "BBBBB2222B", "holderName": "Coastline Engineering",
+   162→     "statusId": "Valid", "lastItrFiled": "2024-05-31"},
+   163→]
+   164→
+   165→# ═══════════════════════════════════════════════════════════════════════════════
+   166→# UDYAM DATABASE — 8 records
+   167→# ═══════════════════════════════════════════════════════════════════════════════
+   168→UDYAM_DATA = [
+   169→    {"udyamNumber": "UDYAM-MH-01-2024000001", "enterpriseName": "TechServe Solutions Pvt Ltd",
+   170→     "catagory": "Small", "statusId": "Active", "registrationDate": "2024-01-15"},
+   171→
+   172→    # Scenario D — Udyam expired
+   173→    {"udyamNumber": "UDYAM-MH-01-2022000003", "enterpriseName": "GreenField Supplies",
+   174→     "catagory": "Micro", "statusId": "Expired", "registrationDate": "2022-05-05"},
+   175→
+   176→    {"udyamNumber": "UDYAM-MH-01-2023000002", "enterpriseName": "Apex Systems Ltd",
+   177→     "catagory": "Small", "statusId": "Active", "registrationDate": "2023-06-20"},
+   178→
+   179→    {"udyamNumber": "UDYAM-MH-01-2024000004", "enterpriseName": "Sunrise Tech Pvt Ltd",
+   180→     "catagory": "Micro", "statusId": "Active", "registrationDate": "2024-02-10"},
+   181→
+   182→    {"udyamNumber": "UDYAM-MH-01-2024000005", "enterpriseName": "SlowPay Enterprises",
+   183→     "catagory": "Small", "statusId": "Active", "registrationDate": "2023-11-01"},
+   184→
+   185→    {"udyamNumber": "UDYAM-MH-01-2024000006", "enterpriseName": "Risky Traders Pvt Ltd",
+   186→     "catagory": "Micro", "statusId": "Cancelled", "registrationDate": "2023-03-15"},
+   187→
+   188→    {"udyamNumber": "UDYAM-MH-01-2024000007", "enterpriseName": "Coastline Engineering",
+   189→     "catagory": "Small", "statusId": "Active", "registrationDate": "2024-03-20"},
+   190→
+   191→    {"udyamNumber": "UDYAM-DL-01-2024000008", "enterpriseName": "SmartBuild Pvt Ltd",
+   192→     "catagory": "Medium", "statusId": "Active", "registrationDate": "2024-01-10"},
+   193→]
+   194→
+   195→# ═══════════════════════════════════════════════════════════════════════════════
+   196→# EPFO DATABASE — 8 records
+   197→# ═══════════════════════════════════════════════════════════════════════════════
+   198→EPFO_DATA = [
+   199→    {"establishmentCode": "MHBAN0012345", "establishmentName": "TechServe Solutions Pvt Ltd",
+   200→     "status": "Compliant", "lastComplianceDate": "2024-07-31", "employeeCount": 45},
+   201→
+   202→    {"establishmentCode": "MHBAN0023456", "establishmentName": "Infra Build Corp",
+   203→     "status": "Non-Compliant", "lastComplianceDate": "2022-12-31", "employeeCount": 120},
+   204→
+   205→    {"establishmentCode": "MHBAN0034567", "establishmentName": "GreenField Supplies",
+   206→     "status": "Compliant", "lastComplianceDate": "2024-06-30", "employeeCount": 12},
+   207→
+   208→    {"establishmentCode": "MHBAN0045678", "establishmentName": "Apex Systems Ltd",
+   209→     "status": "Compliant", "lastComplianceDate": "2024-07-31", "employeeCount": 67},
+   210→
+   211→    {"establishmentCode": "MHBAN0056789", "establishmentName": "SlowPay Enterprises",
+   212→     "status": "Compliant", "lastComplianceDate": "2024-05-31", "employeeCount": 23},
+   213→
+   214→    {"establishmentCode": "MHBAN0067890", "establishmentName": "National Infrastructure Ltd",
+   215→     "status": "Compliant", "lastComplianceDate": "2024-07-31", "employeeCount": 850},
+   216→
+   217→    {"establishmentCode": "MHBAN0078901", "establishmentName": "Sunrise Tech Pvt Ltd",
+   218→     "status": "Compliant", "lastComplianceDate": "2024-06-30", "employeeCount": 35},
+   219→
+   220→    {"establishmentCode": "MHBAN0089012", "establishmentName": "Coastline Engineering",
+   221→     "status": "Compliant", "lastComplianceDate": "2024-04-30", "employeeCount": 28},
+   222→]
+   223→
+   224→# ═══════════════════════════════════════════════════════════════════════════════
+   225→# ESIC DATABASE — 8 records
+   226→# ═══════════════════════════════════════════════════════════════════════════════
+   227→ESIC_DATA = [
+   228→    {"esicCode": "ESIC-MH-000001", "establishmentName": "TechServe Solutions Pvt Ltd",
+   229→     "status": "Compliant", "lastComplianceDate": "2024-07-31"},
+   230→
+   231→    {"esicCode": "ESIC-MH-000002", "establishmentName": "Infra Build Corp",
+   232→     "status": "Non-Compliant", "lastComplianceDate": "2022-12-31"},
+   233→
+   234→    {"esicCode": "ESIC-MH-000003", "establishmentName": "GreenField Supplies",
+   235→     "status": "Compliant", "lastComplianceDate": "2024-06-30"},
+   236→
+   237→    {"esicCode": "ESIC-MH-000004", "establishmentName": "Apex Systems Ltd",
+   238→     "status": "Compliant", "lastComplianceDate": "2024-07-31"},
+   239→
+   240→    {"esicCode": "ESIC-MH-000005", "establishmentName": "SlowPay Enterprises",
+   241→     "status": "Compliant", "lastComplianceDate": "2024-05-31"},
+   242→
+   243→    {"esicCode": "ESIC-MH-000006", "establishmentName": "National Infrastructure Ltd",
+   244→     "status": "Compliant", "lastComplianceDate": "2024-07-31"},
+   245→
+   246→    {"esicCode": "ESIC-MH-000007", "establishmentName": "Sunrise Tech Pvt Ltd",
+   247→     "status": "Compliant", "lastComplianceDate": "2024-06-30"},
+   248→
+   249→    {"esicCode": "ESIC-MH-000008", "establishmentName": "Coastline Engineering",
+   250→     "status": "Compliant", "lastComplianceDate": "2024-04-30"},
+   251→]
+   252→
+   253→# ═══════════════════════════════════════════════════════════════════════════════
+   254→# STARTUP INDIA DATABASE
+   255→# ═══════════════════════════════════════════════════════════════════════════════
+   256→STARTUP_DATA = [
+   257→    {"dpiitNumber": "DPIIT-2024-TS-001", "companyName": "TechServe Solutions Pvt Ltd",
+   258→     "status": "Recognized", "recognitionDate": "2024-01-20"},
+   259→
+   260→    {"dpiitNumber": "DPIIT-2024-ST-002", "companyName": "Sunrise Tech Pvt Ltd",
+   261→     "status": "Recognized", "recognitionDate": "2024-03-15"},
+   262→
+   263→    {"dpiitNumber": "DPIIT-2022-RT-003", "companyName": "Risky Traders Pvt Ltd",
+   264→     "status": "Cancelled", "recognitionDate": "2022-06-01"},
+   265→]
+   266→
+   267→# ═══════════════════════════════════════════════════════════════════════════════
+   268→# NSIC DATABASE
+   269→# ═══════════════════════════════════════════════════════════════════════════════
+   270→NSIC_DATA = [
+   271→    {"nsicNumber": "NSIC-2024-001", "companyName": "TechServe Solutions Pvt Ltd",
+   272→     "status": "Active", "registrationDate": "2024-01-15", "category": "Electronics"},
+   273→
+   274→    {"nsicNumber": "NSIC-2024-002", "companyName": "GreenField Supplies",
+   275→     "status": "Expired", "registrationDate": "2022-05-10", "category": "Agriculture"},
+   276→
+   277→    {"nsicNumber": "NSIC-2024-003", "companyName": "Coastline Engineering",
+   278→     "status": "Active", "registrationDate": "2023-11-20", "category": "Civil Works"},
+   279→]
+   280→
+   281→# ═══════════════════════════════════════════════════════════════════════════════
+   282→# BLACKLIST DATABASE — 3 blacklisted entities
+   283→# ═══════════════════════════════════════════════════════════════════════════════
+   284→BLACKLIST_DATA = [
+   285→    # Scenario C — Blacklisted bidder
+   286→    {"entityName": "Risky Traders Pvt Ltd", "gstin": "27QQQQ1234Q1Z9",
+   287→     "pan": "QQQPQ1234Q",
+   288→     "reason": "Fraudulent bidding activity and submission of false documents",
+   289→     "debarredUntil": "2027-01-15"},
+   290→
+   291→    {"entityName": "Infra Build Corp", "gstin": "27BBCDU1234R1Z6",
+   292→     "pan": "BBCDU1234D",
+   293→     "reason": "Non-performance and repeated violations of procurement norms",
+   294→     "debarredUntil": "2026-12-31"},
+   295→
+   296→    {"entityName": "Dubious Contractors", "gstin": "27ZZZZ4321Z1Z2",
+   297→     "pan": "ZZZZZ4321Z",
+   298→     "reason": "Misrepresentation of financial capacity and substandard work",
+   299→     "debarredUntil": "2028-06-30"},
+   300→]
+   301→
+   302→# ═══════════════════════════════════════════════════════════════════════════════
+   303→# TENDERS — 5 tenders
+   304→# ═══════════════════════════════════════════════════════════════════════════════
+   305→TENDER_DATA = [
+   306→    {
+   307→        "title": "Supply of IT Hardware and Networking Equipment",
+   308→        "tenderId": "TND-2024-001",
+   309→        "description": "Procurement of servers, networking switches, and cybersecurity appliances for government offices across Maharashtra.",
+   310→        "department": "Ministry of Electronics & IT",
+   311→        "statusId": "Open",
+   312→        "bidderCount": 8,
+   313→        "publishedDate": "2024-08-01T10:00:00.000Z",
+   314→        "closingDate": "2024-09-15T17:00:00.000Z",
+   315→    },
+   316→    {
+   317→        "title": "Civil Construction Works for District Warehouse",
+   318→        "tenderId": "TND-2024-002",
+   319→        "description": "Construction of a 5000 sq.m. district warehouse including civil, electrical, and plumbing works.",
+   320→        "department": "Ministry of Rural Development",
+   321→        "statusId": "Open",
+   322→        "bidderCount": 12,
+   323→        "publishedDate": "2024-07-15T10:00:00.000Z",
+   324→        "closingDate": "2024-09-30T17:00:00.000Z",
+   325→    },
+   326→    {
+   327→        "title": "Supply of Medical Equipment to PHCs",
+   328→        "tenderId": "TND-2024-003",
+   329→        "description": "Supply and installation of diagnostic equipment, patient beds, and medical consumables to 50 Primary Health Centres.",
+   330→        "department": "Ministry of Health & Family Welfare",
+   331→        "statusId": "Open",
+   332→        "bidderCount": 6,
+   333→        "publishedDate": "2024-08-10T10:00:00.000Z",
+   334→        "closingDate": "2024-10-05T17:00:00.000Z",
+   335→    },
+   336→    {
+   337→        "title": "IT Infrastructure Upgrade — State Data Centre",
+   338→        "tenderId": "TND-2024-004",
+   339→        "description": "Upgrade of network infrastructure, storage systems, and cybersecurity framework at the State Data Centre.",
+   340→        "department": "Dept. of Information Technology",
+   341→        "statusId": "Closed",
+   342→        "bidderCount": 5,
+   343→        "publishedDate": "2024-06-01T10:00:00.000Z",
+   344→        "closingDate": "2024-07-31T17:00:00.000Z",
+   345→    },
+   346→    {
+   347→        "title": "Solar Power Plant Installation — Government Buildings",
+   348→        "tenderId": "TND-2024-005",
+   349→        "description": "Design, supply, and installation of rooftop solar power plants (500 kW) across 25 government buildings.",
+   350→        "department": "Ministry of New & Renewable Energy",
+   351→        "statusId": "Open",
+   352→        "bidderCount": 9,
+   353→        "publishedDate": "2024-08-20T10:00:00.000Z",
+   354→        "closingDate": "2024-10-15T17:00:00.000Z",
+   355→    },
+   356→]
+   357→
+   358→
+   359→def seed_bidders(tender_ids: list[int]) -> None:
+   360→    """Create 20+ bidders distributed across tenders, covering all 8 scenarios."""
+   361→    if not tender_ids:
+   362→        print("  ✗ No tender IDs — skipping bidders")
+   363→        return
+   364→
+   365→    t1, t2, t3, t4, t5 = (tender_ids + [tender_ids[0]] * 5)[:5]
+   366→
+   367→    bidders = [
+   368→        # ── TENDER 1 — IT Hardware ──────────────────────────────────────────
+   369→        # Scenario A: Perfect bidder
+   370→        {
+   371→            "bidderName": "Rajesh Kumar", "companyName": "TechServe Solutions Pvt Ltd",
+   372→            "tender": t1, "gstin": "27AABCU9603R1Z5", "panNumber": "AABCU9603R",
+   373→            "udyamId": "UDYAM-MH-01-2024000001", "epfoCode": "MHBAN0012345",
+   374→            "esicCode": "ESIC-MH-000001", "dpiitNumber": "DPIIT-2024-TS-001",
+   375→            "nsicNumber": "NSIC-2024-001",
+   376→            "verificationStatus": "Pending", "complianceScore": None,
+   377→        },
+   378→        # Scenario B: GST Cancelled
+   379→        {
+   380→            "bidderName": "Pradeep Singh", "companyName": "Infra Build Corp",
+   381→            "tender": t1, "gstin": "27BBCDU1234R1Z6", "panNumber": "BBCDU1234D",
+   382→            "verificationStatus": "Pending", "complianceScore": None,
+   383→        },
+   384→        # Scenario C: Blacklisted
+   385→        {
+   386→            "bidderName": "Mohan Verma", "companyName": "Risky Traders Pvt Ltd",
+   387→            "tender": t1, "gstin": "27QQQQ1234Q1Z9", "panNumber": "QQQPQ1234Q",
+   388→            "udyamId": "UDYAM-MH-01-2024000006",
+   389→            "verificationStatus": "Pending", "complianceScore": None,
+   390→        },
+   391→        # Scenario D: Udyam expired
+   392→        {
+   393→            "bidderName": "Sunita Rao", "companyName": "GreenField Supplies",
+   394→            "tender": t1, "gstin": "27XYZAB1234C1Z7", "panNumber": "XYZAB1234X",
+   395→            "udyamId": "UDYAM-MH-01-2022000003", "epfoCode": "MHBAN0034567",
+   396→            "esicCode": "ESIC-MH-000003",
+   397→            "verificationStatus": "Pending", "complianceScore": None,
+   398→        },
+   399→        # Scenario E: PAN Name Mismatch
+   400→        {
+   401→            "bidderName": "Vikram Mehta", "companyName": "Apex Systems Ltd",
+   402→            "tender": t1, "gstin": "27AAACV1234D1Z8", "panNumber": "AAACV1234A",
+   403→            "udyamId": "UDYAM-MH-01-2023000002", "epfoCode": "MHBAN0045678",
+   404→            "esicCode": "ESIC-MH-000004",
+   405→            "verificationStatus": "Pending", "complianceScore": None,
+   406→        },
+   407→        # Scenario F: Multiple discrepancies
+   408→        {
+   409→            "bidderName": "Rahul Sharma", "companyName": "Dubious Contractors",
+   410→            "tender": t1, "gstin": "27ZZZZ4321Z1Z2", "panNumber": "ZZZZZ4321Z",
+   411→            "verificationStatus": "Pending", "complianceScore": None,
+   412→        },
+   413→        # Scenario G: Late GST filer
+   414→        {
+   415→            "bidderName": "Anita Patel", "companyName": "SlowPay Enterprises",
+   416→            "tender": t1, "gstin": "27MMMM5678M1Z3", "panNumber": "MMMMP5678M",
+   417→            "udyamId": "UDYAM-MH-01-2024000005", "epfoCode": "MHBAN0056789",
+   418→            "esicCode": "ESIC-MH-000005",
+   419→            "verificationStatus": "Pending", "complianceScore": None,
+   420→        },
+   421→        # Scenario H: Clean non-MSME (no Udyam, not required)
+   422→        {
+   423→            "bidderName": "Kapil Sharma", "companyName": "National Infrastructure Ltd",
+   424→            "tender": t1, "gstin": "27PPPP9876P1Z4", "panNumber": "PPPPP9876P",
+   425→            "epfoCode": "MHBAN0067890", "esicCode": "ESIC-MH-000006",
+   426→            "verificationStatus": "Pending", "complianceScore": None,
+   427→        },
+   428→
+   429→        # ── TENDER 2 — Civil Works ──────────────────────────────────────────
+   430→        {
+   431→            "bidderName": "Deepak Agarwal", "companyName": "Sunrise Tech Pvt Ltd",
+   432→            "tender": t2, "gstin": "27AAAA1111A1Z1", "panNumber": "AAAAA1111A",
+   433→            "udyamId": "UDYAM-MH-01-2024000004", "epfoCode": "MHBAN0078901",
+   434→            "esicCode": "ESIC-MH-000007", "dpiitNumber": "DPIIT-2024-ST-002",
+   435→            "verificationStatus": "Pending", "complianceScore": None,
+   436→        },
+   437→        {
+   438→            "bidderName": "Priya Nair", "companyName": "Coastline Engineering",
+   439→            "tender": t2, "gstin": "27BBBB2222B1Z2", "panNumber": "BBBBB2222B",
+   440→            "udyamId": "UDYAM-MH-01-2024000007", "epfoCode": "MHBAN0089012",
+   441→            "esicCode": "ESIC-MH-000008", "nsicNumber": "NSIC-2024-003",
+   442→            "verificationStatus": "Pending", "complianceScore": None,
+   443→        },
+   444→        {
+   445→            "bidderName": "Sanjay Gupta", "companyName": "Infra Build Corp",
+   446→            "tender": t2, "gstin": "27BBCDU1234R1Z6", "panNumber": "BBCDU1234D",
+   447→            "verificationStatus": "Pending", "complianceScore": None,
+   448→        },
+   449→        {
+   450→            "bidderName": "Rekha Joshi", "companyName": "GreenField Supplies",
+   451→            "tender": t2, "gstin": "27XYZAB1234C1Z7", "panNumber": "XYZAB1234X",
+   452→            "udyamId": "UDYAM-MH-01-2022000003",
+   453→            "verificationStatus": "Pending", "complianceScore": None,
+   454→        },
+   455→
+   456→        # ── TENDER 3 — Medical Equipment ───────────────────────────────────
+   457→        {
+   458→            "bidderName": "Dr. Mohan Das", "companyName": "TechServe Solutions Pvt Ltd",
+   459→            "tender": t3, "gstin": "27AABCU9603R1Z5", "panNumber": "AABCU9603R",
+   460→            "udyamId": "UDYAM-MH-01-2024000001", "epfoCode": "MHBAN0012345",
+   461→            "esicCode": "ESIC-MH-000001",
+   462→            "verificationStatus": "Pending", "complianceScore": None,
+   463→        },
+   464→        {
+   465→            "bidderName": "Pallavi Menon", "companyName": "Apex Systems Ltd",
+   466→            "tender": t3, "gstin": "27AAACV1234D1Z8", "panNumber": "AAACV1234A",
+   467→            "epfoCode": "MHBAN0045678", "esicCode": "ESIC-MH-000004",
+   468→            "verificationStatus": "Pending", "complianceScore": None,
+   469→        },
+   470→        {
+   471→            "bidderName": "Ravi Shankar", "companyName": "Risky Traders Pvt Ltd",
+   472→            "tender": t3, "gstin": "27QQQQ1234Q1Z9", "panNumber": "QQQPQ1234Q",
+   473→            "verificationStatus": "Pending", "complianceScore": None,
+   474→        },
+   475→        {
+   476→            "bidderName": "Kavitha Reddy", "companyName": "National Infrastructure Ltd",
+   477→            "tender": t3, "gstin": "27PPPP9876P1Z4", "panNumber": "PPPPP9876P",
+   478→            "epfoCode": "MHBAN0067890", "esicCode": "ESIC-MH-000006",
+   479→            "verificationStatus": "Pending", "complianceScore": None,
+   480→        },
+   481→        {
+   482→            "bidderName": "Suresh Pillai", "companyName": "Dubious Contractors",
+   483→            "tender": t3, "gstin": "27ZZZZ4321Z1Z2", "panNumber": "ZZZZZ4321Z",
+   484→            "verificationStatus": "Pending", "complianceScore": None,
+   485→        },
+   486→        {
+   487→            "bidderName": "Nisha Kulkarni", "companyName": "SlowPay Enterprises",
+   488→            "tender": t3, "gstin": "27MMMM5678M1Z3", "panNumber": "MMMMP5678M",
+   489→            "udyamId": "UDYAM-MH-01-2024000005",
+   490→            "verificationStatus": "Pending", "complianceScore": None,
+   491→        },
+   492→        {
+   493→            "bidderName": "Amit Tripathi", "companyName": "Sunrise Tech Pvt Ltd",
+   494→            "tender": t3, "gstin": "27AAAA1111A1Z1", "panNumber": "AAAAA1111A",
+   495→            "udyamId": "UDYAM-MH-01-2024000004",
+   496→            "verificationStatus": "Pending", "complianceScore": None,
+   497→        },
+   498→        {
+   499→            "bidderName": "Geeta Iyer", "companyName": "Coastline Engineering",
+   500→            "tender": t3, "gstin": "27BBBB2222B1Z2", "panNumber": "BBBBB2222B",
+   501→            "udyamId": "UDYAM-MH-01-2024000007",
+   502→            "verificationStatus": "Pending", "complianceScore": None,
+   503→        },
+   504→
+   505→        # ── TENDER 4 — Solar Power Plant Installation ───────────────────────
+   506→        {
+   507→            "bidderName": "Arjun Mehta", "companyName": "SolarGrid Energy Pvt Ltd",
+   508→            "tender": t4, "gstin": "27AABCU9603R1Z5", "panNumber": "AABCU9603R",
+   509→            "udyamId": "UDYAM-MH-01-2024000001", "epfoCode": "MHBAN0012345",
+   510→            "esicCode": "ESIC-MH-000001", "verificationStatus": "Pending", "complianceScore": None,
+   511→        },
+   512→        {
+   513→            "bidderName": "Neha Kapoor", "companyName": "SunPeak Renewables",
+   514→            "tender": t4, "gstin": "27BBCDU1234R1Z6", "panNumber": "BBCDU1234D",
+   515→            "verificationStatus": "Pending", "complianceScore": None,
+   516→        },
+   517→        {
+   518→            "bidderName": "Vikram Rao", "companyName": "GreenVolt Systems",
+   519→            "tender": t4, "gstin": "27QQQQ1234Q1Z9", "panNumber": "QQQPQ1234Q",
+   520→            "udyamId": "UDYAM-MH-01-2024000006",
+   521→            "verificationStatus": "Pending", "complianceScore": None,
+   522→        },
+   523→        {
+   524→            "bidderName": "Ishita Sen", "companyName": "BrightRay Infrastructure",
+   525→            "tender": t4, "gstin": "27XYZAB1234C1Z7", "panNumber": "XYZAB1234X",
+   526→            "udyamId": "UDYAM-MH-01-2022000003",
+   527→            "verificationStatus": "Pending", "complianceScore": None,
+   528→        },
+   529→        {
+   530→            "bidderName": "Rohit Desai", "companyName": "Apex Solar Works",
+   531→            "tender": t4, "gstin": "27AAACV1234D1Z8", "panNumber": "AAACV1234A",
+   532→            "epfoCode": "MHBAN0045678", "esicCode": "ESIC-MH-000004",
+   533→            "verificationStatus": "Pending", "complianceScore": None,
+   534→        },
+   535→        {
+   536→            "bidderName": "Meera Joshi", "companyName": "EcoRoof Power",
+   537→            "tender": t4, "gstin": "27PPPP9876P1Z4", "panNumber": "PPPPP9876P",
+   538→            "epfoCode": "MHBAN0067890", "esicCode": "ESIC-MH-000006",
+   539→            "verificationStatus": "Pending", "complianceScore": None,
+   540→        },
+   541→        {
+   542→            "bidderName": "Karan Malhotra", "companyName": "National Solar Services",
+   543→            "tender": t4, "gstin": "27AAAA1111A1Z1", "panNumber": "AAAAA1111A",
+   544→            "udyamId": "UDYAM-MH-01-2024000004",
+   545→            "verificationStatus": "Pending", "complianceScore": None,
+   546→        },
+   547→        {
+   548→            "bidderName": "Pooja Nair", "companyName": "CleanEnergy Contractors",
+   549→            "tender": t4, "gstin": "27BBBB2222B1Z2", "panNumber": "BBBBB2222B",
+   550→            "udyamId": "UDYAM-MH-01-2024000007", "nsicNumber": "NSIC-2024-003",
+   551→            "verificationStatus": "Pending", "complianceScore": None,
+   552→        },
+   553→        {
+   554→            "bidderName": "Aditya Shah", "companyName": "Helio Infrastructure Ltd",
+   555→            "tender": t4, "gstin": "27MMMM5678M1Z3", "panNumber": "MMMMP5678M",
+   556→            "udyamId": "UDYAM-MH-01-2024000005",
+   557→            "verificationStatus": "Pending", "complianceScore": None,
+   558→        },
+   559→    ]
+   560→
+   561→    for b in bidders:
+   562→        tender_id = b.pop("tender")
+   563→        b["tender"] = tender_id  # Strapi relation: just the integer ID
+   564→        post("bidder-applications", b)
+   565→
+   566→
+   567→def main():
+   568→    if not API_TOKEN:
+   569→        print("ERROR: Set STRAPI_API_TOKEN (or STRAPI_API_KEY) before running.")
+   570→        print("  export STRAPI_API_TOKEN=<your_full_access_token>")
+   571→        sys.exit(1)
+   572→
+   573→    print("\n══════════════════════════════════════════════════")
+   574→    print("  AI Tender Compliance — Mock Data Seeder")
+   575→    print("══════════════════════════════════════════════════\n")
+   576→
+   577→    print("📌 Seeding GST Database...")
+   578→    create_all("gst-databases", GST_DATA)
+   579→
+   580→    print("\n📌 Seeding PAN Database...")
+   581→    create_all("pan-databases", PAN_DATA)
+   582→
+   583→    print("\n📌 Seeding Udyam Database...")
+   584→    create_all("udyam-databases", UDYAM_DATA)
+   585→
+   586→    print("\n📌 Seeding EPFO Database...")
+   587→    create_all("epfo-databases", EPFO_DATA)
+   588→
+   589→    print("\n📌 Seeding ESIC Database...")
+   590→    create_all("esic-databases", ESIC_DATA)
+   591→
+   592→    print("\n📌 Seeding Startup India Database...")
+   593→    create_all("startup-india-databases", STARTUP_DATA)
+   594→
+   595→    print("\n📌 Seeding NSIC Database...")
+   596→    create_all("nsic-databases", NSIC_DATA)
+   597→
+   598→    print("\n📌 Seeding Blacklist Database...")
+   599→    create_all("blacklist-databases", BLACKLIST_DATA)
+   600→
+   601→    print("\n📌 Seeding Tenders...")
+   602→    tender_ids = create_all("tenders", TENDER_DATA)
+   603→
+   604→    print(f"\n📌 Seeding Bidder Applications (tender IDs: {tender_ids})...")
+   605→    seed_bidders(tender_ids)
+   606→
+   607→    print("\n══════════════════════════════════════════════════")
+   608→    print("  ✅ Seeding complete!")
+   609→    print("  ⚠  Remember to PUBLISH all records in Strapi Admin")
+   610→    print("     → Content Manager → each type → Select All → Publish")
+   611→    print("══════════════════════════════════════════════════\n")
+   612→
+   613→
+   614→if __name__ == "__main__":
+   615→    main()
+   616→

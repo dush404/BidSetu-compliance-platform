@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pymupdf
+pdf2image
+ollama
+pandas
+requests
+python-multipart
+pydantic
+# --- added during sandbox integration (imported by the code but were missing) ---
+google-generativeai
+python-dotenv
