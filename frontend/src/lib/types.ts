@@ -89,6 +89,8 @@ export interface BidderDocument {
   type: string; // "PDF" | "Image"
   size: string; // "1.2 MB"
   uploadedAt: string;
+  url?: string;
+  mime?: string;
 }
 
 export interface BidderDetail extends Bidder {

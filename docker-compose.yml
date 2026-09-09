@@ -18,6 +18,7 @@ services:
       - DATABASE_FILENAME=.tmp/data.db
     volumes:
       - ./backend/.tmp:/opt/app/.tmp
+      - ./backend/public/uploads:/opt/app/public/uploads
     restart: unless-stopped
 
   ai-worker:
@@ -49,6 +50,8 @@ services:
     container_name: atc-frontend
     ports:
       - "3000:3000"
+    volumes:
+      - ./frontend/src:/app/src
     environment:
       - DATABASE_URL=file:./db/custom.db
       - STRAPI_URL=http://strapi:1337

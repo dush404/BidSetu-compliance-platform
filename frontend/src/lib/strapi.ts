@@ -212,12 +212,16 @@ export async function getStrapiBidder(id: string): Promise<BidderDetail | null> 
 
   const documents: BidderDocument[] = relationItems(value.documents).map((doc, i) => {
     const docFields = fields(doc);
+    const rawUrl = text(docFields.url);
+    const url = rawUrl ? (rawUrl.startsWith("/") ? `/api${rawUrl}` : rawUrl) : undefined;
     return {
       id: text(doc.documentId, String(doc.id || i)),
       name: text(docFields.name || docFields.caption, `Document-${i + 1}.pdf`),
       type: text(docFields.ext, "PDF").replace(/^\./, "").toUpperCase(),
       size: typeof docFields.size === "number" ? `${Math.round(docFields.size)} KB` : "1.2 MB",
       uploadedAt: date(docFields.createdAt),
+      url,
+      mime: text(docFields.mime) || undefined,
     };
   });
 
