@@ -38,8 +38,9 @@ async function probeWorker(): Promise<WorkerProbe> {
       const provider =
         data.provider ??
         (aiSource?.toLowerCase().includes("ollama") ? "ollama" : "gemini");
-      const isOllama = provider === "ollama" || /ollama/i.test(aiSource ?? "");
-      const isGemini = provider === "gemini" || /gemini/i.test(aiSource ?? "");
+      const isNotConfigured = /not configured/i.test(aiSource ?? "");
+      const isOllama = (provider === "ollama" || /ollama/i.test(aiSource ?? "")) && !isNotConfigured;
+      const isGemini = (provider === "gemini" || /gemini/i.test(aiSource ?? "")) && !isNotConfigured;
 
       return {
         online: true,
