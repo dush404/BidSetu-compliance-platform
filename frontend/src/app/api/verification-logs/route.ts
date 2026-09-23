@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       bidderId: bidder.id,
       tenderCode: bidder.tender.code,
       score: data.complianceScore ?? null,
-      model: `AI Worker · ${data.aiSource ?? "Gemini 1.5 Flash"}`,
+      model: `AI Worker · ${data.aiSource ?? "Local Qwen (Ollama)"}`,
       officer: "ATC AI Worker",
       decision,
     },

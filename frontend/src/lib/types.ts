@@ -1,5 +1,5 @@
 // ============================================================
-// AI Tender Compliance Platform — Shared API Contract
+// BidSetu — Shared API Contract
 // Used by both API route handlers and the frontend client.
 // ============================================================
 
@@ -97,6 +97,27 @@ export interface BidderDetail extends Bidder {
   tender: { id: string; code: string; title: string; department: string };
   checks: ComplianceCheck[];
   documents: BidderDocument[];
+  extractedData?: {
+    companyName?: string | null;
+    gstin?: string | null;
+    panNumber?: string | null;
+    udyamId?: string | null;
+    epfoCode?: string | null;
+    esicCode?: string | null;
+    dpiitNumber?: string | null;
+    nsicNumber?: string | null;
+    traceability?: Record<string, { value: string; sourceDoc: string; documentType?: string }>;
+    documentsProcessed?: Array<{ id: string; name: string; documentType: string }>;
+  };
+  verificationLogs?: Array<{
+    id: string;
+    action: string;
+    timestamp: string;
+    complianceScore?: number;
+    riskLevel?: string;
+    aiSource?: string;
+    detailsLog?: any;
+  }>;
 }
 
 export type AuditAction =
@@ -114,7 +135,7 @@ export interface AuditEntry {
   tenderCode: string | null;
   decision: Recommendation | null;
   score: number | null;
-  model: string | null; // "ATC Engine v2 · Gemini 1.5 Flash"
+  model: string | null; // "ATC Engine v2 · Local Qwen 2.5:7b (Ollama)"
   officer: string | null;
   createdAt: string;
 }

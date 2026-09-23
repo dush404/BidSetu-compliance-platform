@@ -38,8 +38,8 @@ interface ExtractResponse {
 }
 
 /**
- * "Scan with AI" — uploads a certificate image to the Python AI worker's
- * Gemini vision endpoint (/extract) and shows the extracted fields plus
+ * "Scan with AI" — uploads a certificate document to the Python AI worker's
+ * PyMuPDF + Local Qwen endpoint (/extract) and shows the extracted fields plus
  * the quick compliance pre-check.
  */
 export function AiDocScan() {
@@ -59,9 +59,9 @@ export function AiDocScan() {
       if (!res.ok) {
         const msg: string = data?.error ?? `Scan failed (${res.status})`;
         if (res.status === 503) {
-          toast.error("AI vision not configured", {
+          toast.error("AI extractor not available", {
             description:
-              "Add GEMINI_API_KEY to mini-services/ai-worker/.env and restart the worker.",
+              "Ensure Ollama is running with qwen2.5:7b on host.",
           });
         } else {
           toast.error("Document scan failed", { description: msg });

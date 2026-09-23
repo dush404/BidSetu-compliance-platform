@@ -9,7 +9,6 @@ interface WorkerProbe {
   aiSource: string | null;
   version: string | null;
   provider: string | null;
-  gemini: boolean;
   ollama: boolean;
   ollamaModel: string | null;
 }
@@ -35,19 +34,15 @@ async function probeWorker(): Promise<WorkerProbe> {
         version?: string | null;
       };
       const aiSource = data.ai_source ?? null;
-      const provider =
-        data.provider ??
-        (aiSource?.toLowerCase().includes("ollama") ? "ollama" : "gemini");
+      const provider = data.provider ?? "ollama";
       const isNotConfigured = /not configured/i.test(aiSource ?? "");
       const isOllama = (provider === "ollama" || /ollama/i.test(aiSource ?? "")) && !isNotConfigured;
-      const isGemini = (provider === "gemini" || /gemini/i.test(aiSource ?? "")) && !isNotConfigured;
 
       return {
         online: true,
         aiSource,
         version: data.version ?? null,
-        provider,
-        gemini: isGemini,
+        provider: "ollama",
         ollama: isOllama,
         ollamaModel: data.ollama_model ?? "qwen2.5:7b",
       };
@@ -61,7 +56,6 @@ async function probeWorker(): Promise<WorkerProbe> {
     aiSource: null,
     version: null,
     provider: null,
-    gemini: false,
     ollama: false,
     ollamaModel: null,
   };

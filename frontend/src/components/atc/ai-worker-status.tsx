@@ -10,8 +10,6 @@ type WorkerState =
   | {
       kind: "online";
       aiSource: string;
-      isOllama: boolean;
-      isGemini: boolean;
       version: string | null;
     }
   | { kind: "offline" };
@@ -24,8 +22,7 @@ function SubLabel({ state }: { state: WorkerState }) {
 
 /**
  * Live status pill for the Python AI worker.
- * Polls /api/ai-worker/health every 15s — shows active engine:
- * Ollama (qwen3:14b), Gemini 3.6 Flash, or Template / Rule engine.
+ * Shows Local Qwen 7B (Ollama) active status.
  */
 export function AiWorkerStatus({ compact = false }: { compact?: boolean }) {
   const [state, setState] = useState<WorkerState>({ kind: "checking" });
@@ -39,20 +36,12 @@ export function AiWorkerStatus({ compact = false }: { compact?: boolean }) {
         const data = await res.json();
         if (!cancelled) {
           if (data.online) {
-            const rawSource = (data.ai_source ?? "").trim();
-            const isOllama = /ollama/i.test(rawSource) || data.provider === "ollama";
-            const isGemini = /gemini/i.test(rawSource) || data.provider === "gemini";
-            const cleanSource = isOllama
-              ? rawSource.replace(/^Ollama\s*\((.*)\)$/i, "Ollama: $1")
-              : isGemini
-                ? rawSource.replace(/^Gemini\s*\((.*)\)$/i, "Gemini: $1")
-                : rawSource || "Rule Engine";
+            const rawSource = (data.ai_source ?? "Ollama (qwen2.5:7b)").trim();
+            const cleanSource = rawSource.replace(/^Ollama\s*\((.*)\)$/i, "Local Qwen: $1");
 
             setState({
               kind: "online",
               aiSource: cleanSource,
-              isOllama,
-              isGemini,
               version: data.version ?? null,
             });
           } else {
@@ -77,30 +66,26 @@ export function AiWorkerStatus({ compact = false }: { compact?: boolean }) {
       ? "bg-muted-foreground/50"
       : state.kind === "offline"
         ? "bg-bad"
-        : state.isOllama
-          ? "bg-indigo-500 shadow-sm shadow-indigo-500/50"
-          : state.isGemini
-            ? "bg-ok shadow-sm shadow-emerald-500/50"
-            : "bg-warn";
+        : "bg-indigo-500 shadow-sm shadow-indigo-500/50";
 
   return (
     <span
       className={cn(
         "flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 transition-colors",
-        state.kind === "online" && state.isOllama
+        state.kind === "online"
           ? "border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-950/20"
           : "border-border bg-card"
       )}
       title={
         state.kind === "online"
-          ? `Active AI Worker: ${state.aiSource}`
-          : "Python AI Worker (FastAPI on :8000)"
+          ? `Active Local AI: ${state.aiSource}`
+          : "Local Python AI Worker (FastAPI on :8000)"
       }
     >
       <Cpu
         className={cn(
           "size-3.5",
-          state.kind === "online" && state.isOllama
+          state.kind === "online"
             ? "text-indigo-600 dark:text-indigo-400"
             : "text-muted-foreground"
         )}
@@ -120,7 +105,7 @@ export function AiWorkerStatus({ compact = false }: { compact?: boolean }) {
       ) : (
         <>
           <span className="hidden text-[11px] font-medium tracking-wide text-muted-foreground lg:inline">
-            AI Engine:
+            Local AI:
           </span>
           <AnimatePresence mode="wait" initial={false}>
             <motion.span
@@ -139,12 +124,12 @@ export function AiWorkerStatus({ compact = false }: { compact?: boolean }) {
               </span>
               <span
                 className={cn(
-                  "font-medium",
-                  state.kind === "offline"
-                    ? "text-bad"
-                    : state.kind === "online" && state.isOllama
-                      ? "font-semibold text-indigo-700 dark:text-indigo-300"
-                      : "text-foreground"
+                  "font-mono font-medium",
+                  state.kind === "online"
+                    ? "text-indigo-700 dark:text-indigo-300 font-semibold"
+                    : state.kind === "offline"
+                      ? "text-bad"
+                      : "text-muted-foreground"
                 )}
               >
                 <SubLabel state={state} />

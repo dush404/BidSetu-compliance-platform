@@ -129,10 +129,10 @@ export function SidebarContent({
           {!isCollapsed && (
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold tracking-tight">
-                AI Tender Compliance
+                BidSetu
               </span>
-              <span className="block text-[11px] text-muted-foreground">
-                {t("gov_procurement")}
+              <span className="block truncate text-[11px] text-muted-foreground" title="Intelligent verification for better procurement">
+                Intelligent verification for better procurement
               </span>
             </span>
           )}

@@ -15,7 +15,7 @@ import type { VerificationOutcome, VerificationCheckResult } from "./verificatio
 export const AI_WORKER_URL =
   process.env.AI_WORKER_URL ?? "http://localhost:3010";
 
-export const WORKER_MODEL_LABEL = "AI Worker · Gemini 3.6 Flash";
+export const WORKER_MODEL_LABEL = "AI Worker · Local Qwen 2.5:7b (Ollama)";
 
 // ---- raw worker result shapes (mirrors verification_pipeline.py) ----
 

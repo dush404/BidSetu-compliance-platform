@@ -24,6 +24,7 @@ import {
   ExternalLink,
   Download,
   Image as ImageIcon,
+  Cpu,
 } from "lucide-react";
 import {
   Dialog,
@@ -261,6 +262,88 @@ export function BidderDetailView({ bidderId }: { bidderId: string }) {
           {/* ——— Main grid ——— */}
           <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <div className="min-w-0 space-y-6">
+              {/* Extracted Credentials (Local AI · Qwen Document Traceability) */}
+              <section aria-label="Extracted statutory credentials">
+                <Reveal className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="size-4 text-primary" />
+                    <h2 className="font-display text-2xl">Extracted Credentials</h2>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                    <Sparkles className="size-3" />
+                    PyMuPDF + Local Qwen 7B
+                  </span>
+                </Reveal>
+
+                <Reveal delay={0.04} className="card-hairline overflow-hidden p-5">
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Statutory credentials extracted directly from submitted documents. Click any source document to preview the original file.
+                  </p>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {[
+                      { key: "companyName", label: "Legal Entity Name", value: bidder.extractedData?.companyName || bidder.company, defaultDoc: "PAN_Certificate.pdf" },
+                      { key: "gstin", label: "GSTIN", value: bidder.extractedData?.gstin || bidder.gstin, defaultDoc: "GST_Certificate.pdf" },
+                      { key: "pan", label: "PAN Number", value: bidder.extractedData?.panNumber || bidder.pan, defaultDoc: "PAN_Certificate.pdf" },
+                      { key: "udyam", label: "Udyam Registration", value: bidder.extractedData?.udyamId, defaultDoc: "Udyam_Registration.pdf" },
+                      { key: "epfo", label: "EPFO Establishment Code", value: bidder.extractedData?.epfoCode, defaultDoc: "EPFO_Certificate.pdf" },
+                      { key: "esic", label: "ESIC Registration Code", value: bidder.extractedData?.esicCode, defaultDoc: "ESIC_Certificate.pdf" },
+                      { key: "dpiit", label: "DPIIT Recognition No.", value: bidder.extractedData?.dpiitNumber, defaultDoc: "DPIIT_Certificate.pdf" },
+                      { key: "nsic", label: "NSIC Registration No.", value: bidder.extractedData?.nsicNumber, defaultDoc: "NSIC_Certificate.pdf" },
+                    ].map((item) => {
+                      const trace = bidder.extractedData?.traceability?.[item.key];
+                      const sourceDocName = trace?.sourceDoc || (item.value ? bidder.documents.find(d => d.name.toLowerCase().includes(item.key))?.name || item.defaultDoc : null);
+
+                      return (
+                        <div key={item.label} className="rounded-xl border border-border bg-muted/20 p-3.5 flex flex-col justify-between gap-2.5">
+                          <div>
+                            <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                              {item.label}
+                            </span>
+                            <span className="block font-mono text-sm font-semibold text-foreground mt-1 truncate">
+                              {item.value || (
+                                <span className="font-sans font-normal text-muted-foreground italic text-xs">
+                                  Not detected in documents
+                                </span>
+                              )}
+                            </span>
+                          </div>
+
+                          {item.value && sourceDocName && (
+                            <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+                              <button
+                                onClick={() => {
+                                  const target = bidder.documents.find(
+                                    (d) =>
+                                      d.name.toLowerCase() === sourceDocName.toLowerCase() ||
+                                      d.name.toLowerCase().includes(item.key.toLowerCase())
+                                  ) || {
+                                    id: `source-${item.key}`,
+                                    name: sourceDocName,
+                                    type: "PDF",
+                                    size: "Extracted",
+                                    uploadedAt: bidder.lastCheckedAt || new Date().toISOString(),
+                                  };
+                                  setPreviewDoc(target);
+                                }}
+                                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-primary hover:underline"
+                                title="Click to view source document"
+                              >
+                                <FileText className="size-3" />
+                                <span className="truncate max-w-[160px]">{sourceDocName}</span>
+                              </button>
+                              <span className="text-[10px] text-ok bg-ok/10 border border-ok/30 px-1.5 py-0.2 rounded font-medium">
+                                Verified
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Reveal>
+              </section>
+
               {/* checklist */}
               <section aria-label="Compliance checklist">
                 <Reveal className="mb-3 flex items-center gap-2">
@@ -459,6 +542,46 @@ export function BidderDetailView({ bidderId }: { bidderId: string }) {
                       </li>
                     ))}
                 </ul>
+              </Reveal>
+
+              {/* Chronological Verification Log (Strapi Audit Trail) */}
+              <Reveal delay={0.14} className="card-hairline overflow-hidden">
+                <div className="flex items-center gap-2 border-b border-border bg-accent/40 px-5 py-3.5">
+                  <Clock3 className="size-4 text-primary" />
+                  <h3 className="text-sm font-semibold tracking-tight">Verification Log</h3>
+                  <span className="ml-auto text-[10px] font-medium text-muted-foreground">
+                    Strapi Audit Trail
+                  </span>
+                </div>
+                <div className="max-h-64 overflow-y-auto divide-y divide-border/60 px-5 py-2">
+                  {bidder.verificationLogs && bidder.verificationLogs.length > 0 ? (
+                    bidder.verificationLogs.map((log, i) => (
+                      <div key={log.id || i} className="py-2.5 text-xs space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-semibold text-[11px] text-foreground">
+                            {log.action}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {fmtDateTime(log.timestamp).split(",")[1] || timeAgo(log.timestamp)}
+                          </span>
+                        </div>
+                        {log.detailsLog && typeof log.detailsLog === "object" && log.detailsLog.msg && (
+                          <p className="text-muted-foreground text-[11px] leading-snug">
+                            {log.detailsLog.msg}
+                          </p>
+                        )}
+                        <span className="inline-block text-[10px] text-primary font-mono">
+                          {log.aiSource || "Local Qwen 7B"}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-5 text-center text-xs text-muted-foreground space-y-1">
+                      <p className="font-medium text-foreground">Audit events persisted on verification</p>
+                      <p className="text-[11px]">Click "Run verification" to generate real-time Strapi audit records.</p>
+                    </div>
+                  )}
+                </div>
               </Reveal>
 
               {/* officer decision */}

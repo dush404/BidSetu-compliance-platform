@@ -81,8 +81,8 @@ export function LoginView() {
                 <Mark className="size-6" />
               </span>
               <div>
-                <p className="text-sm font-semibold tracking-tight">AI Tender Compliance</p>
-                <p className="text-xs text-muted-foreground">Government Procurement Platform</p>
+                <p className="text-sm font-semibold tracking-tight">BidSetu</p>
+                <p className="text-xs text-muted-foreground">Intelligent verification for better procurement</p>
               </div>
             </div>
           </Reveal>
@@ -100,13 +100,6 @@ export function LoginView() {
                 <br />
                 <em className="text-primary">done calmly.</em>
               </h1>
-            </Reveal>
-            <Reveal delay={0.28}>
-              <p className="mt-6 max-w-md text-[15px] leading-relaxed text-muted-foreground">
-                Verify bidder documents, surface risk early, and keep every
-                procurement decision transparent — in one quiet, focused
-                workspace.
-              </p>
             </Reveal>
             <Reveal delay={0.38} className="mt-10">
               <div className="grid max-w-md grid-cols-3 gap-3">
@@ -149,8 +142,8 @@ export function LoginView() {
                 <Mark className="size-5.5" />
               </span>
               <div>
-                <p className="text-sm font-semibold tracking-tight">AI Tender Compliance</p>
-                <p className="text-[11px] text-muted-foreground">Government Procurement Platform</p>
+                <p className="text-sm font-semibold tracking-tight">BidSetu</p>
+                <p className="text-[11px] text-muted-foreground">Intelligent verification for better procurement</p>
               </div>
             </Reveal>
 
