@@ -114,42 +114,67 @@ def get_bidders_for_tender(tender_id: int) -> list[dict[str, Any]]:
 
 
 def get_bidder(bidder_id: str | int) -> dict[str, Any] | None:
-    """Return a single bidder-application by Strapi numeric ID.
+    """Return a single bidder-application by Strapi numeric ID or documentId.
 
     Strapi 5 item routes require documentId, while the UI uses numeric IDs.
     Querying by the numeric id keeps both sides compatible.
     """
+    bidder_str = str(bidder_id)
+
+    # 1. Try direct GET if bidder_id is a documentId
     try:
-        data = _get(f"bidder-applications/{bidder_id}", {"populate": "*"})
+        data = _get(f"bidder-applications/{bidder_str}", {"populate": "*"})
         records = data.get("data", [])
-        if not records:
-            return None
-        record = records[0] if isinstance(records, list) else records
-        attrs = record.get("attributes", record)
-        attrs["documentId"] = record.get("documentId")
-        attrs["_id"] = record.get("id", bidder_id)
-        return attrs
+        if records:
+            record = records[0] if isinstance(records, list) else records
+            attrs = record.get("attributes", record)
+            attrs["documentId"] = record.get("documentId", bidder_str)
+            attrs["_id"] = record.get("id")
+            return attrs
     except StrapiClientError:
-        try:
-            data = _get(
-                "bidder-applications",
-                {
-                    "filters[id][$eq]": str(bidder_id),
-                    "populate": "*",
-                    "pagination[limit]": "1",
-                },
-            )
-            records = data.get("data", [])
-        except StrapiClientError:
-            return None
-        if not records: return None
-        record = records[0]
-        attrs = record.get("attributes", record)
-        attrs["documentId"] = record.get("documentId")
-        attrs["_id"] = record.get("id", bidder_id)
-        return attrs
+        pass
+
+    # 2. Try filter by documentId
+    try:
+        data = _get(
+            "bidder-applications",
+            {
+                "filters[documentId][$eq]": bidder_str,
+                "populate": "*",
+                "pagination[limit]": "1",
+            },
+        )
+        records = data.get("data", [])
+        if records:
+            record = records[0]
+            attrs = record.get("attributes", record)
+            attrs["documentId"] = record.get("documentId", bidder_str)
+            attrs["_id"] = record.get("id")
+            return attrs
     except StrapiClientError:
-        return None
+        pass
+
+    # 3. Try filter by numeric id
+    try:
+        data = _get(
+            "bidder-applications",
+            {
+                "filters[id][$eq]": bidder_str,
+                "populate": "*",
+                "pagination[limit]": "1",
+            },
+        )
+        records = data.get("data", [])
+        if records:
+            record = records[0]
+            attrs = record.get("attributes", record)
+            attrs["documentId"] = record.get("documentId")
+            attrs["_id"] = record.get("id")
+            return attrs
+    except StrapiClientError:
+        pass
+
+    return None
 
 
 # ── Government databases ─────────────────────────────────────────────────────
@@ -234,6 +259,7 @@ def check_blacklist(gstin: str | None, pan: str | None, company_name: str | None
 def save_verification_result(
     bidder_id: str | int,
     result: dict[str, Any],
+    document_id: str | None = None,
 ) -> None:
     """Update the bidder-application record with the verification result."""
     recommendation = result.get("recommendation")
@@ -242,29 +268,55 @@ def save_verification_result(
         "DISQUALIFY": "Rejected",
         "MANUAL_REVIEW": "Manual Review",
     }
-    payload = {
-        "data": {
-            "verificationStatus": status_by_recommendation.get(
-                recommendation, "Manual Review"
-            ),
-            "complianceScore": result.get("overallScore"),
-            "riskLevel": result.get("riskLevel"),
-            "aiRecommendation": result.get("aiSummary", ""),
-            "verificationResult": result,
-            "lastVerifiedAt": result.get("verifiedAt"),
-        }
+    extracted_data = result.get("extractedData") or {}
+    data_payload = {
+        "verificationStatus": status_by_recommendation.get(
+            recommendation, "Manual Review"
+        ),
+        "complianceScore": result.get("overallScore"),
+        "riskLevel": result.get("riskLevel"),
+        "aiRecommendation": result.get("aiSummary", ""),
+        "verificationResult": result,
+        "lastVerifiedAt": result.get("verifiedAt"),
     }
-    bidder = get_bidder(bidder_id)
-    document_id = bidder.get("documentId") if bidder else None
+    if extracted_data:
+        data_payload["extractedData"] = extracted_data
+        if extracted_data.get("companyName"):
+            data_payload["companyName"] = extracted_data["companyName"]
+        if extracted_data.get("gstin"):
+            data_payload["gstin"] = extracted_data["gstin"]
+        if extracted_data.get("panNumber"):
+            data_payload["panNumber"] = extracted_data["panNumber"]
+        if extracted_data.get("udyamId"):
+            data_payload["udyamId"] = extracted_data["udyamId"]
+        if extracted_data.get("epfoCode"):
+            data_payload["epfoCode"] = extracted_data["epfoCode"]
+        if extracted_data.get("esicCode"):
+            data_payload["esicCode"] = extracted_data["esicCode"]
+        if extracted_data.get("dpiitNumber"):
+            data_payload["dpiitNumber"] = extracted_data["dpiitNumber"]
+        if extracted_data.get("nsicNumber"):
+            data_payload["nsicNumber"] = extracted_data["nsicNumber"]
+
+    payload = {"data": data_payload}
+    if not document_id:
+        bidder = get_bidder(bidder_id)
+        document_id = bidder.get("documentId") if bidder else None
     if not document_id:
         raise StrapiClientError(f"Bidder {bidder_id} has no Strapi documentId")
     _put(f"bidder-applications/{document_id}", payload)
 
 
-def create_verification_log(bidder_id: str | int, action: str, details: dict[str, Any]) -> None:
+def create_verification_log(
+    bidder_id: str | int,
+    action: str,
+    details: dict[str, Any],
+    document_id: str | None = None,
+) -> None:
     """Create a VerificationLog entry."""
-    bidder = get_bidder(bidder_id)
-    document_id = bidder.get("documentId") if bidder else None
+    if not document_id:
+        bidder = get_bidder(bidder_id)
+        document_id = bidder.get("documentId") if bidder else None
     if not document_id:
         raise StrapiClientError(f"Bidder {bidder_id} has no documentId for verification log")
 

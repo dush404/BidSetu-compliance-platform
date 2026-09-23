@@ -212,12 +212,16 @@ export async function getStrapiBidder(id: string): Promise<BidderDetail | null> 
 
   const documents: BidderDocument[] = relationItems(value.documents).map((doc, i) => {
     const docFields = fields(doc);
+    const rawUrl = text(docFields.url);
+    const url = rawUrl ? (rawUrl.startsWith("/") ? `/api${rawUrl}` : rawUrl) : undefined;
     return {
       id: text(doc.documentId, String(doc.id || i)),
       name: text(docFields.name || docFields.caption, `Document-${i + 1}.pdf`),
       type: text(docFields.ext, "PDF").replace(/^\./, "").toUpperCase(),
       size: typeof docFields.size === "number" ? `${Math.round(docFields.size)} KB` : "1.2 MB",
       uploadedAt: date(docFields.createdAt),
+      url,
+      mime: text(docFields.mime) || undefined,
     };
   });
 
@@ -226,6 +230,31 @@ export async function getStrapiBidder(id: string): Promise<BidderDetail | null> 
     if (rawRec.toUpperCase().includes("QUALIFY") || rawRec.toUpperCase() === "VERIFIED") recommendation = "QUALIFY";
     else if (rawRec.toUpperCase().includes("DISQUALIFY") || rawRec.toUpperCase() === "REJECTED") recommendation = "DISQUALIFY";
     else if (rawRec.toUpperCase().includes("REVIEW") || rawRec.toUpperCase().includes("MANUAL")) recommendation = "CLARIFY";
+  }
+
+  const extractedData = (value.extractedData as any) || rawResult?.extractedData || undefined;
+
+  let verificationLogs: any[] = [];
+  try {
+    const logRes = await request(
+      `verification-logs?filters[bidder][id][$eq]=${encodeURIComponent(String(response.data.id))}&sort=timestamp:desc&pagination[limit]=20`
+    ).catch(() => null);
+    if (logRes && Array.isArray(logRes.data)) {
+      verificationLogs = logRes.data.map((l: any) => {
+        const lf = fields(l);
+        return {
+          id: text(l.documentId, String(l.id)),
+          action: text(lf.action, "VERIFICATION_EVENT"),
+          timestamp: date(lf.timestamp || lf.createdAt),
+          complianceScore: typeof lf.complianceScore === "number" ? lf.complianceScore : undefined,
+          riskLevel: text(lf.riskLevel),
+          aiSource: text(lf.aiSource, "Ollama"),
+          detailsLog: lf.detailsLog,
+        };
+      });
+    }
+  } catch {
+    // ignore
   }
 
   return {
@@ -252,6 +281,8 @@ export async function getStrapiBidder(id: string): Promise<BidderDetail | null> 
     },
     checks: mappedChecks,
     documents,
+    extractedData,
+    verificationLogs,
   };
 }
 
@@ -281,7 +312,7 @@ export async function createStrapiVerificationLog(
         timestamp: new Date().toISOString(),
         complianceScore: details.score ?? null,
         riskLevel: details.riskLevel === "Critical" ? "High" : (details.riskLevel ?? "Low"),
-        aiSource: details.aiSource ?? "Gemini 1.5 Flash",
+        aiSource: details.aiSource ?? "Local Qwen 2.5:7b (Ollama)",
         detailsLog: details.detailsLog ?? {},
       },
     }),
@@ -346,7 +377,7 @@ export async function getStrapiAuditLogs(): Promise<AuditEntry[]> {
       tenderCode: null,
       decision,
       score: typeof value.complianceScore === "number" ? value.complianceScore : null,
-      model: text(value.aiSource, "AI Worker · Gemini 1.5 Flash"),
+      model: text(value.aiSource, "AI Worker · Local Qwen (Ollama)"),
       officer: act.includes("decision") ? "Procurement Officer" : "ATC AI Worker",
       createdAt: date(entity.createdAt || value.timestamp),
     };

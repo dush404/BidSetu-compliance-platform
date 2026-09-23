@@ -1,350 +1,192 @@
-# AI-Powered Bid Compliance Verification Platform
-> **Smart India Hackathon (SIH26100)** · Automated Government Procurement Tender Scrutiny, Multi-Registry Verification, and AI-Driven Risk Assessment.
+# BidSetu — AI-Powered Bidder Verification Platform
+> **Smart India Hackathon (SIH26100)** · Automated Government Procurement Tender Scrutiny, Document-First Multi-Registry Verification, and Local-AI Risk Assessment.
 
 ---
 
 ## 📑 Table of Contents
 1. [The Problem & The Solution](#-the-problem--the-solution)
-2. [Detailed Technology Stack](#-detailed-technology-stack)
-3. [System Architecture & Data Flow](#-system-architecture--data-flow)
-4. [What Is Built & Functional (Present)](#-what-is-built--functional-present)
-5. [What Is Not Present & Production Roadmap (Gaps & Limitations)](#-what-is-not-present--production-roadmap-gaps--limitations)
+2. [Document-First & Local-AI Architecture](#-document-first--local-ai-architecture)
+3. [Technology Stack](#-technology-stack)
+4. [Verification Pipeline & Data Flow](#-verification-pipeline--data-flow)
+5. [Synthetic Evaluation Dataset (3 Demo Bidders)](#-synthetic-evaluation-dataset-3-demo-bidders)
 6. [Simulated Statutory Registries](#-simulated-statutory-registries)
 7. [Developer Console & Pipeline Diagnostics](#-developer-console--pipeline-diagnostics)
-8. [Quick Start Guide (Local & Docker)](#-quick-start-guide-local--docker)
-9. [Local Ollama Setup (qwen2.5:7b / qwen3:14b)](#-local-ollama-setup-qwen257b--qwen314b)
-10. [Evaluation Demo Walkthrough](#-evaluation-demo-walkthrough)
-11. [Repository Structure](#-repository-structure)
+8. [Quick Start Guide (Docker & Local)](#-quick-start-guide-docker--local)
+9. [Local Ollama Setup (qwen2.5:7b)](#-local-ollama-setup-qwen257b)
+10. [Repository Structure](#-repository-structure)
 
 ---
 
 ## 🎯 The Problem & The Solution
 
 ### ❌ The Problem
-In government procurement (e.g. **GeM - Government e-Marketplace**, **CPPP - Central Public Procurement Portal**, State e-Procurement):
-- **Weeks of Manual Scrutiny**: Technical and legal evaluation of hundreds of bidder applications takes weeks of manual checks by procurement officers.
-- **Fragmented Portals**: Officers must manually log into 8+ disparate government portals (GSTN, Traces/Income Tax, Udyam, EPFO Shram Suvidha, ESIC, DPIIT, NSIC, Central Debarment registers) for every single bidder.
-- **Fraud & Cartelization**: Fraudulent entities slip through using cancelled GSTINs, forged MSME exemptions, expired startup recognition, or by bidding under sister companies while debarred.
-- **Human Error & Bias**: Fatigue-induced mistakes and subjective decisions result in litigation, tender cancellations, and audit objections from CAG / CVC.
+In public procurement (**GeM - Government e-Marketplace**, **CPPP**, State e-Procurement):
+- **Weeks of Manual Document Scrutiny**: Technical and legal evaluation of hundreds of bidder applications requires manually downloading and reading dozens of statutory certificates per bidder.
+- **Manual Data Entry Vulnerabilities**: In legacy systems, bidders self-report GSTIN, PAN, and Udyam numbers on web forms, creating discrepancies between entered text and submitted PDF documents.
+- **Fragmented Portals**: Procurement officers must manually log into 8+ disparate government portals (GSTN, Traces/Income Tax, Udyam, EPFO Shram Suvidha, ESIC, DPIIT, NSIC, Central Debarment registers) for every single bidder.
+- **Data Privacy & Air-Gap Requirements**: Sensitive procurement tenders (defense, atomic energy, infrastructure) cannot send confidential bidder filings or proprietary certificates to external cloud AI APIs.
 
-### ✅ The Solution
-An autonomous **procurement compliance & risk evaluation platform** that automates technical scrutiny end-to-end:
-1. **Instant Multi-Registry Cross-Examination**: Programmatically queries all 8 statutory databases in parallel within seconds.
-2. **Deterministic, Tamper-Proof Rule Engine**: Evaluates statutory compliance using hardcoded legal rules (not probabilistic LLM guesses), calculating an objective Compliance Score (0–100) and Risk Tier (Low, Medium, High, Critical).
-3. **Dual AI Intelligence (Cloud or Local Offline)**:
-   - **Google Gemini 3.6 Flash**: Synthesizes complex multi-registry findings into succinct legal and technical summaries.
-   - **Local Ollama (`qwen3:14b`)**: Provides 100% air-gapped, sovereign, offline AI evaluation for confidential defense and sensitive government procurements.
-4. **Officer Decision Workbench**: An intuitive interface where procurement officers can inspect discrepancies, issue clarification notices, or finalize qualification with full human oversight.
-5. **Immutable Audit Trail**: Chronologically logs every API request, timestamp, score calculation, and officer sign-off for transparency.
+### ✅ The Solution: BidSetu
+BidSetu is an autonomous, **DOCUMENT-FIRST** and **LOCAL-AI ONLY** verification platform:
+1. **Document-First Extraction**: Bidders do not type statutory credentials. Instead, certificates (GST, PAN, Udyam, EPFO, ESIC, Financial Audits, Non-Blacklisting Affidavits) are uploaded as PDFs.
+2. **Local AI Parsing with PyMuPDF & Qwen**: PyMuPDF extracts raw text from PDF bytes; local Qwen (`qwen2.5:7b` running via Ollama) extracts structured statutory credentials with complete document traceability.
+3. **Instant Multi-Registry Cross-Examination**: Programmatically queries all 8 simulated statutory databases using extracted values.
+4. **Deterministic Rule Engine**: Evaluates statutory compliance using hardcoded legal rules (not probabilistic LLM guesses), calculating an objective Compliance Score (0–100) and Risk Tier (Low, Medium, High, Critical).
+5. **Local AI Summary Synthesis**: Local Qwen synthesizes a concise, legally sound explanatory summary for the procurement officer.
+6. **In-App Document Preview Modal**: Officers can click any extracted credential or source document to view the authentic statutory PDF directly within the application.
+7. **Immutable Audit Trail**: Chronologically logs every extraction event, database check, score calculation, and officer sign-off in Strapi `verification-logs`.
 
 ---
 
-## 💻 Detailed Technology Stack
+## 🔒 Document-First & Local-AI Architecture
+
+```mermaid
+flowchart TB
+    subgraph InputTier ["1. Document Submission (Document-First)"]
+        PDFs["Attached PDF Package\n(GST, PAN, Udyam, EPFO, ESIC, CA Audit, Affidavit)"]
+    end
+
+    subgraph ParserTier ["2. Local Text Extraction"]
+        PyMuPDF["PyMuPDF (fitz) Engine\nExtracts high-resolution text streams from PDF bytes"]
+    end
+
+    subgraph LocalAITier ["3. Sovereign Local AI (Ollama)"]
+        Qwen["Local Qwen (qwen2.5:7b via Ollama)\nStructured Statutory JSON Extraction\n+ Regex Deterministic Fallback"]
+        Traceability["Field Traceability Map\n(Extracted Field → Source Document → Check)"]
+    end
+
+    subgraph RegistryTier ["4. Simulated Government Databases"]
+        GSTDB[("GST Database (GSTN)")]
+        PANDB[("Income Tax PAN Database")]
+        UdyamDB[("MSME Udyam Registry")]
+        EPFODB[("EPFO Establishment DB")]
+        ESICDB[("ESIC Employer DB")]
+        BlacklistDB[("Central Debarment Registry")]
+    end
+
+    subgraph RuleTier ["5. Deterministic Rule Engine"]
+        Engine["GFR Compliance Engine\nCalculates Score (0-100), Risk & Recommendation\n(QUALIFY · MANUAL_REVIEW · DISQUALIFY)"]
+    end
+
+    subgraph SummaryTier ["6. Local AI Summary & Persistence"]
+        QwenSummary["Local Qwen Summary Synthesis\n(Explanatory Justification for Officer)"]
+        StrapiDB[("Strapi CMS & Verification Logs")]
+    end
+
+    PDFs --> PyMuPDF
+    PyMuPDF --> Qwen
+    Qwen --> Traceability
+    Traceability --> Engine
+    Engine <--> GSTDB & PANDB & UdyamDB & EPFODB & ESICDB & BlacklistDB
+    Engine --> QwenSummary
+    QwenSummary --> StrapiDB
+```
+
+---
+
+## 💻 Technology Stack
 
 The platform is engineered as a decoupled, multi-tier microservices architecture:
 
 ### 1. Frontend Layer (Next.js & UI Architecture)
-- **Framework**: **Next.js 16 (Turbopack, App Router)** with Server Components and dynamic Route Handlers.
+- **Framework**: **Next.js 16 (Turbopack, App Router)** with dynamic Route Handlers and Server Components.
 - **Library**: **React 19** with client-side state hooks.
 - **Styling & Design System**: **Tailwind CSS v4** with PostCSS and responsive layout utilities.
-- **Animations & Interaction**: **Framer Motion 12** powering the real-time live scanner overlay, accordion transitions, and status badges.
-- **State Management**: **Zustand 5** for lightweight, reactive officer state, filters, and active bidder context.
-- **UI Components**: **Radix UI Primitives** + **Shadcn UI** patterns (Accordions, Dialogs, Tooltips, Tabs, Badges, Progress bars).
-- **Data Visualization**: **Recharts** and **Lucide React** icons.
-- **Embedded Cache / Fallback**: **Prisma ORM 6** connected to a local SQLite database (`custom.db`) providing zero-latency fallback when offline.
+- **Animations & Interaction**: **Framer Motion 12** powering the 15-step live scanner overlay and document preview modal.
+- **State Management**: **Zustand 5** for officer state, filters, and active bidder context.
+- **In-App Document Viewer**: Next.js proxy route `/api/uploads/[...path]` serving uploaded PDFs with `application/pdf` streaming and iframe modal viewer.
 
-### 2. Backend & CMS Layer (Strapi & Database)
-- **Platform**: **Strapi v5 (Headless CMS)** running on Node.js 20/22.
+### 2. Backend & CMS Layer (Strapi v5)
+- **Platform**: **Strapi v5 (Headless CMS)** running on Node.js 20.
 - **Database**: **SQLite (`better-sqlite3`)** embedded relational database.
-- **API Architecture**: Authenticated REST API with Bearer Token authorization (`STRAPI_API_TOKEN`).
+- **Media Library**: Strapi Upload plugin storing submitted bidder certificate PDFs.
 - **Content Collections**:
   - `tenders`: Tender metadata, codes, departments, categories, closing dates, estimated value.
-  - `bidder-applications`: Bidder details, contact names, credentials (GSTIN, PAN, Udyam, EPFO, ESIC, DPIIT, NSIC), status, scores, verification payloads.
+  - `bidder-applications`: Bidder details, attached PDF documents, `extractedData` JSON payload with traceability, status, scores.
   - `verification-logs`: Immutable chronological log of verification events and officer decisions.
-  - **Simulated Statutory Registries**: Dedicated schemas for `gst-records`, `pan-records`, `udyam-records`, `epfo-records`, `esic-records`, `startup-india-records`, `nsic-records`, and `blacklist-records`.
+  - **Simulated Statutory Registries**: Dedicated schemas for `gst-databases`, `pan-databases`, `udyam-databases`, `epfo-databases`, `esic-databases`, `startup-india-databases`, `nsic-databases`, and `blacklist-databases`.
 
 ### 3. AI & Verification Microservice Layer (Python & FastAPI)
-- **Framework**: **Python 3.11** + **FastAPI** + **Uvicorn** (asynchronous ASGI server).
-- **Compliance Rule Engine**: Pure deterministic Python logic implementing Ministry of Finance (DoE) & GeM General Financial Rules (GFR).
-- **Cloud LLM**: **Google Gemini 3.6 Flash** (via `google-generativeai` SDK) with automatic fallback to `gemini-flash-latest` and `gemini-flash-lite-latest`.
-- **Local / Air-Gapped LLM**: **Ollama** integration supporting **`qwen3:14b`** (with regex filtering of `<think>` reasoning blocks).
-- **Document & PDF Parsing**: **PyMuPDF (fitz)**, **pdf2image**, and **python-multipart**.
-- **Data Serialization**: **Pydantic v2** for strict request/response data validation.
-
-### 4. Containerization & DevOps
-- **Container Engine**: **Docker** + **Docker Compose**.
-- **Base Images**: Debian Bookworm Slim (`node:20-bookworm-slim`, `python:3.11-slim`).
-- **Networking**: Internal bridged Docker network (`atc-network`) with `host.docker.internal` gateway bridging to host machine services (Ollama).
+- **Framework**: **Python 3.11** + **FastAPI** + **Uvicorn** (asynchronous ASGI server on port 8000).
+- **PDF Engine**: **PyMuPDF (`pymupdf`/`fitz`)** for programmatic text and layout parsing.
+- **Local LLM Engine**: **Ollama** running locally on host (`http://host.docker.internal:11434`) using **`qwen2.5:7b`**.
+- **Rule Engine**: Deterministic Python logic implementing Ministry of Finance General Financial Rules (GFR).
+- **Data Privacy**: **Zero cloud AI dependencies** — zero tokens or documents sent outside the local environment.
 
 ---
 
-## 🏛️ System Architecture & Data Flow
+## 📊 Synthetic Evaluation Dataset (3 Demo Bidders)
 
-```mermaid
-flowchart TB
-    subgraph Client ["Client Tier (Browser)"]
-        UI["Next.js 16 Web Application\n(Tailwind CSS · Framer Motion · Zustand)"]
-    end
+The repository includes a synthetic test package under Tender **`TDR-2026-001`** (*Supply, Testing and Commissioning of 33/11kV Electrical Substation Equipment*):
 
-    subgraph FrontendServer ["Next.js Server Tier (:3000)"]
-        Proxy["Next.js API Adapter Routes\n/api/bidders/[id]/verify · /decision · /audit"]
-        LocalCache[(Prisma SQLite Cache)]
-    end
-
-    subgraph CMSTier ["CMS & Database Tier (:1337)"]
-        Strapi["Strapi v5 Headless CMS"]
-        DB[(SQLite Persistent Storage\nTenders · Bidders · Registries · Logs)]
-    end
-
-    subgraph AITier ["AI Verification Microservice (:8000)"]
-        FastAPI["FastAPI Scrutiny Service"]
-        RuleEngine["Deterministic Rule Engine\n(8 Statutory Verification Checks)"]
-        CloudLLM["Google Gemini 3.6 Flash\n(Cloud Intelligence)"]
-        LocalLLM["Ollama qwen3:14b\n(Air-Gapped Local LLM)"]
-    end
-
-    UI -->|HTTP Requests| Proxy
-    Proxy -->|Read / Write| LocalCache
-    Proxy -->|REST API with Bearer Token| Strapi
-    Strapi -->|CRUD| DB
-    Proxy -->|POST /verify-bidder/:id| FastAPI
-    FastAPI -->|Query Bidder & Registries| Strapi
-    FastAPI --> RuleEngine
-    RuleEngine -->|Compliance Findings| CloudLLM
-    RuleEngine -->|Offline Finding Mode| LocalLLM
-    FastAPI -->|Save Result & Audit Log| Strapi
-```
-
-### End-to-End Execution Sequence:
-1. **Officer clicks "Verify"** on a bidder in the Next.js UI.
-2. Next.js route `/api/bidders/[id]/verify` calls the FastAPI service at `/verify-bidder/{id}`.
-3. The AI worker queries Strapi to pull the bidder's credentials and simultaneously queries all 8 statutory registries.
-4. The **Rule Engine** evaluates the 8 checks (e.g. checking if GST status is "Active", verifying return filing recency, confirming PAN entity name match, inspecting blacklist).
-5. The **Scoring Engine** computes an objective compliance score (0–100) and risk tier (Low / Medium / High / Critical).
-6. The active LLM (**Gemini 3.6 Flash** or **Ollama Qwen 3 14B**) generates an executive summary synthesizing the discrepancies and legal findings.
-7. The result is saved directly into Strapi (`PUT /api/bidder-applications/:id`) and recorded in `verification-logs`.
-8. The Next.js frontend updates its UI, displaying the verified badge, score meter, and accordion breakdowns.
-
----
-
-## ✅ What Is Built & Functional (Present)
-
-| Component / Feature | Implementation Status | Notes |
-|---|---|---|
-| **Next.js 16 Web Dashboard** | ✅ **100% Functional** | Responsive, cinematic layout with dark/light themes, search, and tenders listing. |
-| **Cinematic Live Scanner** | ✅ **100% Functional** | Real-time multi-step verification animation evaluating each registry step-by-step. |
-| **Comprehensive Bidder Dossier** | ✅ **100% Functional** | Drill-down view showing submitted credentials vs verified values for all 8 registries. |
-| **Deterministic Rule Engine** | ✅ **100% Functional** | 8 statutory compliance checkers calculating compliance score, risk level, and recommendation. |
-| **Google Gemini 3.6 Flash** | ✅ **100% Functional** | Dynamic cloud LLM with automatic fallback (`gemini-3.6-flash` -> `gemini-flash-latest`). |
-| **Local Ollama (`qwen2.5:7b`)** | ✅ **100% Functional** | Air-gapped offline support with automated `<think>` reasoning tag sanitization & CPU fallback. |
-| **AI Priority Cascade** | ✅ **100% Functional** | Cloud-first (`Gemini → Ollama → Rules`) or Local-first (`Ollama → Gemini → Rules`) with visual UI badges. |
-| **Live Pipeline Monitor (SSE)** | ✅ **100% Functional** | Real-time Server-Sent Events monitor with visual milestone progress bar (`Fetch → DB → Rules → AI → Save → Done`). |
-| **Role-Based Isolation (RBAC)** | ✅ **100% Functional** | Developer console and live pipeline monitors are strictly isolated to Developer role (`HTTP 403` guarded). |
-| **Statutory Connector Config & Testing** | ✅ **100% Functional** | Dynamic URL/key config per registry + live HTTP latency/status test buttons in Developer settings. |
-| **Strapi v5 CMS Integration** | ✅ **100% Functional** | Full CRUD, relationship resolution, audit logging, and document parsing. |
-| **Procurement Officer Workbench** | ✅ **100% Functional** | Official qualification actions: `QUALIFY`, `CLARIFY`, and `DISQUALIFY` with officer notes. |
-| **Tamper-Evident Audit Trail** | ✅ **100% Functional** | Chronological log of automated AI verifications, scores, and officer decisions. |
-| **1-Click Launchers (`start-all.bat`)** | ✅ **100% Functional** | Windows scripts to start all 3 services and stop/free ports cleanly (`stop-all.bat`). |
-| **Full Docker Containerization** | ✅ **100% Functional** | Multi-container Docker Compose setup with host-gateway bridging to local Ollama. |
-
----
-
-## ⚠️ What Is Not Present & Production Roadmap (Gaps & Limitations)
-
-To maintain transparency during hackathon evaluation and technical audits, here is an honest assessment of **what is currently simulated or not present**, along with the exact roadmap to transition this prototype into a national production deployment:
-
-### 1. Simulated vs. Live Government APIs
-- **Current State (Present)**: The 8 statutory registries (GSTN, Income Tax PAN, Udyam, EPFO, ESIC, Startup India, NSIC, Debarment) are **simulated** using structured collections inside Strapi.
-- **Why**: Real Indian government portals (GSTN Sandbox, NSDL/UTIITSL PAN Verification, Shram Suvidha, Digilocker API) require institutional digital signature certificates (DSC), formal Ministry MoUs, and commercial API gateway contracts (e.g. Setu, Karza, Sandbox.in).
-- **Production Path**: The code is architected with an adapter interface (`ai-worker/verification_pipeline.py`). In production, replacing `fetch_gst_status()` with calls to the official **API Setu** / **Open Government Data (OGD)** gateway requires modifying only the HTTP client functions without touching the rule engine or UI.
-
-### 2. Authentication & National Single Sign-On (SSO)
-- **Current State (Present)**: The portal uses a simulated officer authentication (`officer@gov.in` / any password).
-- **What is Missing**: Integration with **Parichay / MeriPehchaan** (National Single Sign-On for Government of India) or Jan Parichay.
-- **Production Path**: Implement OpenID Connect (OIDC) / SAML 2.0 with MeriPehchaan along with Hardware Token (e-Token / Class 3 DSC) two-factor authentication for signing qualification orders.
-
-### 3. Deep OCR for Physical Stamp Papers & Scanned PDFs
-- **Current State (Present)**: Basic text extraction via PyMuPDF is implemented for machine-readable PDFs and images.
-- **What is Missing**: Multi-lingual OCR for low-resolution, stamped non-judicial stamp papers (affidavits, power of attorney, bank guarantees) with handwritten signatures.
-- **Production Path**: Integrate **Google Cloud Document AI (Procurement Parser)** or **Bhashini OCR** (Indian language document recognition) to extract metadata from physical scans before passing them to the rule engine.
-
-### 4. Distributed Immutable Audit Anchoring
-- **Current State (Present)**: Audit entries are stored in relational databases (Strapi SQLite and Prisma SQLite).
-- **What is Missing**: Cryptographic hash chaining or distributed ledger anchoring.
-- **Production Path**: Anchor hourly audit batch hashes to the **National Informatics Centre (NIC) Blockchain** or **Hyperledger Fabric** to ensure legal non-repudiation in Central Vigilance Commission (CVC) or court inquiries.
-
----
-
-## 🏛️ Simulated Statutory Registries
-
-The platform includes built-in simulated data reflecting real-world compliance scenarios:
-
-| Registry | Authority | Verification Parameters | Real-World Scenario Covered |
-|---|---|---|---|
-| **GSTN** | Goods & Services Tax Network | GSTIN validity, Entity legal name, Filing recency (3B/GSTR-1) | Flags bidders who have not filed tax returns in >90 days. |
-| **PAN** | Income Tax Department | Permanent Account Number validity, Category cross-check | Detects shell companies with mismatched PAN names. |
-| **Udyam** | Ministry of MSME | MSME Certificate ID, Enterprise category (Micro/Small/Medium) | Validates tender fee / EMD exemption eligibility. |
-| **EPFO** | Employees' Provident Fund Org | PF Registration code, Remittance compliance status | Ensures statutory labor welfare dues are currently remitted. |
-| **ESIC** | Employees' State Insurance Corp | ESIC employer code, Employee insurance status | Verifies compliance with employee medical insurance rules. |
-| **Startup India** | DPIIT, Ministry of Commerce | DPIIT Certificate number, Recognition validity | Validates turnover and prior experience exemptions. |
-| **NSIC** | National Small Industries Corp | SPRS registration number, Expiry date | Verifies Single Point Registration Scheme privileges. |
-| **Central Debarment** | Procurement Vigilance Bureau | Central blacklist registry, Debarred directors / PANs | **Immediately disqualifies** suspended or blacklisted entities. |
+| Bidder | Submitted Documents | Compliance Highlights | Expected Verdict | Score |
+|---|---|---|---|---|
+| **Apex Electricals & Power Infrastructure Pvt Ltd** | 7 PDFs: GST, PAN, Udyam, EPFO, ESIC, CA Audited Turnover (₹18.45 Cr), Non-Blacklisting Affidavit | Active GST, Recent returns, Valid PAN, Medium Enterprise Udyam, 85 EPFO/ESIC members, Clean Debarment | **QUALIFY** | **100 / 100** (Low Risk) |
+| **Nova Energy & Engineering Systems LLP** | 7 PDFs: GST, PAN, Udyam, EPFO, ESIC, CA Audited Financials (₹6.25 Cr), Non-Blacklisting Affidavit | Active GST, Valid PAN, Small Enterprise Udyam, Compliant EPFO (28 members), ESIC branch record mismatch | **MANUAL_REVIEW** | **94 / 100** (Low Risk, Review flagged) |
+| **Vanguard Infra Projects Pvt Ltd** | 7 PDFs: GST, PAN, Udyam, EPFO, ITR-V, Turnover Statement (₹2.1 Cr), Debarment Declaration | Cancelled GSTIN (Sec 29 non-filing), Defaulting EPFO, Deficit turnover, Active Debarment Ban in Blacklist DB | **DISQUALIFY** | **0 / 100** (Critical Risk) |
 
 ---
 
 ## 🛠️ Developer Console & Pipeline Diagnostics
 
-The platform includes a dedicated **Developer Console** designed for platform engineers to configure statutory integrations, switch AI modes, and diagnose verification pipelines in real-time.
+### 1. 15-Step Real-Time Live Overlay
+When an officer triggers verification, the UI displays a 15-step progress overlay:
+1. Loading attached bidder documents from Strapi
+2. Parsing document bytes via PyMuPDF
+3. Running Local Qwen (`qwen2.5:7b`) for statutory JSON extraction
+4. Correlating extracted GSTIN, PAN, Udyam, EPFO, ESIC
+5. Checking GST status & filing recency against GSTN
+6. Cross-referencing PAN against Income Tax database
+7. Verifying MSME registration & classification
+8. Validating EPFO labor compliance & contribution recency
+9. Checking ESIC social security registration
+10. Querying Startup India (DPIIT) registry
+11. Querying NSIC single-point registration
+12. Scanning Central Debarment / Blacklist registry
+13. Running deterministic GFR scoring engine
+14. Generating explanatory AI summary via Local Qwen
+15. Persisting audit log and verification result to Strapi
 
-### 1. AI Priority Cascade
-The AI evaluation engine supports two primary execution strategies with automatic fallback:
-- **Cloud-First Cascade (`Gemini`)**:
-  $$\text{Gemini 3.6 Flash (Cloud)} \longrightarrow \text{Ollama Local (Fallback)} \longrightarrow \text{Deterministic Rule Engine}$$
-  If Gemini encounters rate limits or network dropouts, execution gracefully falls back to local Ollama, and ultimately to the rule engine.
-- **Local-First Cascade (`Ollama`)**:
-  $$\text{Ollama Local (qwen2.5:7b)} \longrightarrow \text{Gemini Cloud (Fallback)} \longrightarrow \text{Deterministic Rule Engine}$$
-  Ideal for air-gapped environments. If Ollama experiences GPU memory pressure, it automatically falls back to CPU mode, then Gemini, then the rule engine.
-- Visual badges on each mode card in Settings clearly communicate the active fallback cascade.
-
-### 2. Statutory Database Connector Configuration & Testing
-In **Platform Settings**, all 8 statutory registry connectors (GSTN, PAN, Udyam, EPFO, ESIC, DPIIT, NSIC, Debarment) can be configured dynamically:
-- **Accordion Configuration**: Click on any registry to supply a custom **API Base URL** and **API Key / Bearer Token** (persisted in local browser storage).
-- **Dynamic Mode Badge**: Transition dynamically from `Simulated` to `Live` when custom endpoints are provided.
-- **Test Connection**: Inline testing button pings the external API and reports live latency in milliseconds and HTTP status codes (e.g. `✓ 6ms · HTTP 200`).
-
-### 3. AI Connectivity & Health Probes
-- **Test Gemini**: Directly verifies Google Gemini API connectivity and reports model name and response latency.
-- **Test Ollama**: Directly verifies that the local Ollama instance is active and the specified model is loaded.
-
-### 4. Real-Time Pipeline Monitor (Live SSE Stream)
-Visible at the top of the **Audit Logs** view for developers (`developer@example.com`):
-- **Milestone Progress Bar**: Visually illuminates progress through each verification phase:
-  $$\text{Fetch} \longrightarrow \text{DB Checks} \longrightarrow \text{Rules} \longrightarrow \text{AI} \longrightarrow \text{Save} \longrightarrow \text{Done}$$
-- **Color-Coded Terminal Feed**:
-  - `[FETCH]` (Blue): Bidder record retrieval.
-  - `[DB:*]` (Cyan): Individual government database queries (GST, PAN, EPFO, etc.).
-  - `[RULES]` (Yellow): Compliance score and discrepancy computation.
-  - `[AI:OLLAMA]` / `[AI:GEMINI]` (Purple): LLM prompt execution and summary synthesis.
-  - `[SAVE]` (Emerald): Strapi and Prisma persistence.
-  - `[DONE]` (Green): Final verification outcome.
-- **Role-Based Isolation (RBAC)**: The live monitor is completely hidden from Procurement Officers (`officer@gov.in`), and server endpoints (`/api/dev/log-stream` & `/api/dev/logs`) strictly reject non-developer requests with `HTTP 403 Forbidden`.
+### 2. Extracted Credentials & Traceability Card
+In the Bidder Detail view, an **Extracted Credentials** card displays each detected credential with its source document name. Clicking on the source document immediately opens the authentic certificate in the in-app PDF preview modal.
 
 ---
 
-## 🚀 Quick Start Guide (Local & Docker)
+## 🚀 Quick Start Guide (Docker & Local)
 
-### Option 1: 1-Click Windows Launch (Recommended for Evaluation)
-Double-click **`start-all.bat`** in the project root. It will automatically start:
-1. **Strapi CMS** (`http://localhost:1337`)
-2. **Python AI Worker** (`http://localhost:8000`)
-3. **Next.js Frontend** (`http://localhost:3000`)
+### Option 1: Docker Compose (Recommended)
 
-To cleanly kill all 3 services and release ports, double-click **`stop-all.bat`**.
+```powershell
+# 1. Start Docker containers
+docker compose up -d
 
-#### 🔄 Reset Demo & Clear Verification Cache:
-Whenever you want to restart the website from a clean slate:
-- Double-click **`reset-demo.bat`** in the root directory.
-- This resets all bidder verification statuses back to **Pending**, clears scores and audit logs, but **keeps all tenders, bidders, and government registries intact**.
-- Press `Ctrl + Shift + R` in the browser to refresh. All tenders and bidders will fetch fresh and be ready for live verification.
+# 2. Run the synthetic bidder & document seed script
+python backend/scripts/seed_demo_bidders.py
+
+# 3. Open the platform in your browser
+http://localhost:3000
+```
+
+### Option 2: 1-Click Windows Launch
+Double-click **`start-all.bat`** in the root directory. To stop all services cleanly, double-click **`stop-all.bat`**.
 
 ---
 
-### Option 2: Docker Containerization
-To run the entire system containerized:
+## 🦙 Local Ollama Setup (qwen2.5:7b)
 
-```powershell
-# 1. Ensure local ports 3000, 8000, 1337 are free
-.\stop-all.bat
-
-# 2. Build and launch all 3 containers
-docker compose up --build
-```
-*(Or in background mode: `docker compose up -d`)*
-
----
-
-### Option 3: Manual Step-by-Step Launch
-
-#### Terminal 1 — Strapi Backend
-```powershell
-cd c:\SIH\Ge-compliance-platform\backend
-npm run develop
-```
-*Runs on `http://localhost:1337` (Admin: `/admin`)*
-
-#### Terminal 2 — Python AI Worker
-```powershell
-cd c:\SIH\Ge-compliance-platform\ai-worker
-.\.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-*Runs on `http://localhost:8000` (Health: `/health`)*
-
-#### Terminal 3 — Next.js Frontend
-```powershell
-cd c:\SIH\Ge-compliance-platform\frontend
-npm run dev
-```
-*Runs on `http://localhost:3000`*
-
----
-
-## 🦙 Local Ollama Setup (`qwen2.5:7b` / `qwen3:14b`)
-
-For high-security defense or classified procurement tenders where cloud APIs cannot be used, the AI worker connects natively to local **Ollama**:
-
-### 1. Check Ollama Status
-Verify Ollama is running and your model is loaded:
-```powershell
-ollama list
-```
-*(Recommended model for consumer GPUs/laptops: `ollama run qwen2.5:7b`)*
-
-### 2. Configure Environment
-In [`ai-worker/.env`](file:///c:/SIH/Ge-compliance-platform/ai-worker/.env) or Docker Compose:
-```env
-# Change provider to local Ollama
-AI_PROVIDER=ollama
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:7b
-```
-
-### 3. Verify Health
-Visit `http://localhost:8000/health`:
-```json
-{
-  "status": "ok",
-  "provider": "ollama",
-  "ai_source": "Ollama (qwen2.5:7b)",
-  "ollama_url": "http://localhost:11434",
-  "ollama_model": "qwen2.5:7b"
-}
-```
-
-> [!TIP]
-> The AI Worker includes automatic GPU $\rightarrow$ CPU fallback. If CUDA encounters buffer overruns or shared object memory errors on Windows, the worker automatically re-queries Ollama in CPU mode (`num_gpu: 0`) without dropping the request.
-
----
-
-## 🎯 Evaluation Demo Walkthrough
-
-Follow this step-by-step sequence during judging:
-
-1. **Sign In**:
-   - Navigate to `http://localhost:3000`.
-   - Log in as **Procurement Officer** (`officer@gov.in` / any password).
-2. **View Tenders**:
-   - Open tender **TND-2024-001** (*Supply of IT Hardware and Networking Equipment*).
-   - Show the list of submitted bidders with their current status.
-3. **Trigger Real-Time AI Verification**:
-   - Click **Verify** on a pending bidder (e.g. **TechServe Solutions Pvt Ltd**).
-   - Observe the **cinematic live scanner** querying all 8 statutory databases simultaneously.
-   - Note the **Gemini 3.6 Flash** / **Qwen 3 14B** summary generated with compliance justification.
-4. **Inspect Compliance Dossier**:
-   - Open the bidder's profile to review findings across GSTN, PAN, EPFO, ESIC, and Blacklist.
-   - Point out discrepancy warnings (e.g. GST return filing recency warnings).
-5. **Record Official Decision**:
-   - Use the **Decision Bar** to submit a formal procurement decision: **Qualify**, **Clarify**, or **Disqualify**.
-   - Navigate to the **Audit Trail** view to show the tamper-evident log entry.
+1. Download and install Ollama from [ollama.com](https://ollama.com).
+2. Pull the Qwen model:
+   ```bash
+   ollama pull qwen2.5:7b
+   ```
+3. Start the Ollama server:
+   ```bash
+   ollama serve
+   ```
+4. Verify accessibility:
+   ```bash
+   curl http://localhost:11434/api/tags
+   ```
 
 ---
 
@@ -352,30 +194,24 @@ Follow this step-by-step sequence during judging:
 
 ```
 Ge-compliance-platform/
-├── start-all.bat            # 1-Click launcher for all 3 microservices
-├── stop-all.bat             # 1-Click port release & cleanup script
-├── docker-compose.yml       # Production Docker Compose specification
-├── README.md                # Comprehensive documentation & architecture guide
-│
-├── frontend/                # Next.js 16 Web Application
-│   ├── Dockerfile           # Node 20 Debian container definition
-│   ├── src/app/             # App Router pages and API routes
-│   │   ├── api/bidders/     # Bidder detail, verify, and decision endpoints
-│   │   ├── api/tenders/     # Tender browsing and detail endpoints
-│   │   └── api/audit/       # Audit trail query endpoints
-│   ├── src/components/atc/  # ATC UI modules, Dossiers, Command Palette
-│   └── src/lib/             # Strapi client, Zustand store, Types
-│
-├── backend/                 # Strapi v5 Headless CMS
-│   ├── Dockerfile           # Node 20 Debian container definition
-│   ├── src/api/             # Schemas for Tenders, Bidders, Registries
-│   └── .tmp/data.db         # Seeded SQLite database
-│
-└── ai-worker/               # Python 3.11 FastAPI Verification Service
-    ├── Dockerfile           # Python 3.11 Slim container definition
-    ├── main.py              # Microservice routes, health, and extraction
-    ├── verification_pipeline.py # 8-step verification pipeline & LLM synthesis
-    ├── rule_engine.py       # Statutory compliance scoring logic
-    └── strapi_client.py     # REST client for Strapi database integration
+├── ai-worker/                      # Python FastAPI Local AI Verification Worker
+│   ├── document_extractor.py       # PyMuPDF text parser + Local Qwen JSON extractor
+│   ├── verification_pipeline.py    # 15-step document-first verification orchestrator
+│   ├── rule_engine.py              # Deterministic statutory scoring & risk engine
+│   ├── strapi_client.py            # Strapi v5 REST client with documentId resolution
+│   ├── main.py                     # FastAPI server with SSE log streams & endpoints
+│   └── requirements.txt            # Python dependencies (pymupdf, ollama, fastapi)
+├── backend/                        # Strapi v5 Headless CMS & Database
+│   ├── scripts/
+│   │   └── seed_demo_bidders.py    # Generates 21 statutory PDFs & seeds registries
+│   ├── src/api/                    # Content-types (bidders, tenders, 8 registries)
+│   └── Dockerfile
+├── frontend/                       # Next.js 16 Web Application
+│   ├── src/
+│   │   ├── app/                    # App Router pages & API proxy routes
+│   │   ├── components/atc/         # Scrutiny workbench, scanner overlay, PDF modal
+│   │   └── lib/                    # Strapi client, store, and data contracts
+│   └── Dockerfile
+├── docker-compose.yml              # Multi-container orchestration
+└── README.md
 ```
-That's all-------------->

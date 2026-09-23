@@ -43,6 +43,7 @@
     },
     "aiRecommendation": { "type": "text" },
     "verificationResult": { "type": "json" },
+    "extractedData": { "type": "json" },
     "lastVerifiedAt": { "type": "datetime" },
     "verificationlog": { "type": "json" }
   }

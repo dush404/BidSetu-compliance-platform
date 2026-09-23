@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { Mark, EASE } from "./motion";
 
-const WORD = "AI Tender Compliance";
+const WORD = "BidSetu";
 
 /* Cinematic initial page load: drawn mark, letter stagger, counter, curtain lift */
 export function Preloader({ onDone }: { onDone: () => void }) {
@@ -58,7 +58,7 @@ export function Preloader({ onDone }: { onDone: () => void }) {
           transition={{ delay: 0.9, duration: 0.5 }}
           className="mt-2 text-[11px] font-medium tracking-[0.32em] text-muted-foreground uppercase"
         >
-          Government Procurement Platform
+          Intelligent Verification for Better Procurement
         </motion.p>
       </motion.div>
 

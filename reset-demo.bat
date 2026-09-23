@@ -1,5 +1,5 @@
 @echo off
-title Reset Demo Data - AI Tender Compliance Platform
+title Reset Demo Data - BidSetu
 echo ======================================================================
 echo    Resetting Verification Cache and Bidder Statuses (Clean State)
 echo ======================================================================

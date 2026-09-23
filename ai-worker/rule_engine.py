@@ -427,8 +427,13 @@ def determine_recommendation(score: int, risk: str, checks: dict) -> str:
     if risk == "High" or score < 70:
         return "MANUAL_REVIEW"
 
+    # Any statutory check (GST, PAN, EPFO, ESIC) flagged for review requires manual officer review
+    for check_name in ("gst", "pan", "epfo", "esic"):
+        if checks.get(check_name, {}).get("status") == "REVIEW":
+            return "MANUAL_REVIEW"
+
     fail_count = sum(1 for c in checks.values() if c.get("status") == "FAIL")
-    if fail_count >= 2:
+    if fail_count >= 1:
         return "MANUAL_REVIEW"
 
     return "QUALIFY"

@@ -4,15 +4,16 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
-  title: "AI Tender Compliance — Government Procurement Platform",
+  title: "BidSetu — Intelligent Verification for Better Procurement",
   description:
-    "Verify bidder documents, surface risk, and keep every procurement decision transparent and audit-ready.",
+    "Intelligent verification for better procurement. Verify bidder documents against government registries with local AI.",
   keywords: [
     "tender",
     "procurement",
     "compliance",
     "government",
     "verification",
+    "BidSetu",
   ],
   icons: {
     icon: "/mark.svg",

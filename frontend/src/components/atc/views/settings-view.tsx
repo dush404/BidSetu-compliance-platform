@@ -134,10 +134,8 @@ export function SettingsView() {
   const [testing, setTesting] = useState<Record<string, boolean>>({});
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
 
-  // AI model test state
-  const [testingGemini, setTestingGemini] = useState(false);
+  // Local AI model test state
   const [testingOllama, setTestingOllama] = useState(false);
-  const [geminiTestResult, setGeminiTestResult] = useState<string | null>(null);
   const [ollamaTestResult, setOllamaTestResult] = useState<string | null>(null);
 
   // Persist configs to localStorage whenever they change
@@ -167,14 +165,13 @@ export function SettingsView() {
   }, [recheck]);
 
   const worker = status?.aiWorker;
-  const cloudLive = !!worker?.online && worker.gemini;
   const localLive = !!worker?.online && !!worker.ollama;
   const fallbackLive = !!worker && !worker.online;
 
   const pickMode = async (m: AiMode) => {
     setAiMode(m);
     const labels: Record<AiMode, string> = {
-      cloud: "Cloud AI — Gemini 3.6 Flash",
+      cloud: `Local AI — Ollama (${worker?.ollamaModel ?? "qwen2.5:7b"})`,
       local: `Local AI — Ollama (${worker?.ollamaModel ?? "qwen2.5:7b"})`,
       fallback: "Fallback — rule-only mode",
     };
@@ -294,45 +291,30 @@ export function SettingsView() {
     cascade: string;
   }[] = [
     {
-      id: "cloud",
-      icon: Cloud,
-      title: "Cloud AI",
-      sub: "Gemini 3.6 Flash",
-      live: cloudLive,
-      cascade: "Cloud → Local → Rules",
-      note: worker
-        ? worker.online
-          ? worker.gemini
-            ? "Summaries & extraction live via Google API"
-            : "Waiting for GEMINI_API_KEY in worker .env"
-          : "Worker offline — unreachable"
-        : "Checking…",
-    },
-    {
       id: "local",
       icon: Laptop,
-      title: "Local AI",
+      title: "Local AI (Document-First)",
       sub: `Local LLM (Ollama: ${worker?.ollamaModel ?? "qwen2.5:7b"})`,
       live: localLive,
-      cascade: "Local → Cloud → Rules",
+      cascade: "PyMuPDF → Local Qwen → Rules",
       note: worker
         ? worker.online
           ? worker.ollama
-            ? `Active on localhost:11434 (${worker.ollamaModel ?? "qwen3:14b"})`
-            : "Click to switch active engine to Ollama"
-          : "Worker offline"
+            ? `Active on localhost:11434 (${worker.ollamaModel ?? "qwen2.5:7b"})`
+            : "Worker online · Standby"
+          : "Worker offline — unreachable"
         : "Checking…",
     },
     {
       id: "fallback",
       icon: ShieldCheck,
       title: "Fallback",
-      sub: "Rule-only mode",
+      sub: "Deterministic Rule-Only Mode",
       live: fallbackLive,
       cascade: "Rules only",
       note: worker?.online
-        ? "Standby — engages if the worker goes offline"
-        : "Built-in rule engine is verifying",
+        ? "Standby — engages if the AI worker goes offline"
+        : "Built-in rule engine is active",
     },
   ];
 
@@ -502,27 +484,7 @@ export function SettingsView() {
               Test AI Connectivity
             </p>
             <div className="flex flex-wrap gap-3">
-              {/* Test Gemini */}
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={() => void testGemini()}
-                  disabled={testingGemini}
-                  className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-                >
-                  {testingGemini ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <TestTube2 className="size-3.5" />
-                  )}
-                  <Cloud className="size-3" />
-                  Test Gemini
-                </button>
-                {geminiTestResult && (
-                  <p className={cn("pl-1 text-[11px]", geminiTestResult.startsWith("✓") ? "text-ok" : "text-bad")}>
-                    {geminiTestResult}
-                  </p>
-                )}
-              </div>
+
 
               {/* Test Ollama */}
               <div className="flex flex-col gap-1">

@@ -1,5 +1,5 @@
 // ============================================================
-// AI Tender Compliance Platform — Simulated Verification Engine
+// BidSetu — Simulated Verification Engine
 // Shared by prisma/seed.ts and POST /api/bidders/[id]/verify so
 // seed data and live verification output stay consistent.
 // Deterministic: outcomes derive from a djb2 hash of the bidder id.
@@ -54,7 +54,7 @@ export interface VerificationOptions {
   forceChecks?: Partial<Record<string, ForcedCheck>>;
 }
 
-const MODEL_LABEL = "ATC Engine v2 · Gemini 1.5 Flash";
+const MODEL_LABEL = "ATC Engine v2 · Local Qwen 2.5:7b (Ollama)";
 const DATA_SOURCE = "SIMULATED_GOV_DATABASE";
 
 // ---- deterministic hash (djb2) ----

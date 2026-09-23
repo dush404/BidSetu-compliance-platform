@@ -1,7 +1,7 @@
 @echo off
-title AI Tender Compliance Platform - Launcher
+title BidSetu - Launcher
 echo ======================================================================
-echo    Starting AI-Powered Bid Compliance Verification Platform (SIH)
+echo    Starting BidSetu — Intelligent Verification for Better Procurement
 echo ======================================================================
 echo.
 

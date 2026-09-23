@@ -12,3 +12,5 @@ backend/.tmp/
 .env
 .env.ai
 ai-worker/.env
+backend/public/uploads/*
+!backend/public/uploads/.gitkeep

@@ -1,7 +1,7 @@
 @echo off
-title AI Tender Compliance Platform - Stopper
+title BidSetu - Stopper
 echo ======================================================================
-echo    Stopping AI Tender Compliance Services (Ports 3000, 8000, 1337)
+echo    Stopping BidSetu Services (Ports 3000, 8000, 1337)
 echo ======================================================================
 echo.
 
